@@ -17,11 +17,7 @@ Rationale:
 
 ## FrankenPHP Binary Validation
 
-FrankenPHP was installed directly as a binary at:
-
-```text
-/opt/bin/frankenphp
-```
+FrankenPHP was installed directly as a binary at `/opt/bin/frankenphp`.
 
 Validated version:
 
@@ -31,9 +27,7 @@ PHP 8.5.8
 Caddy v2.11.4
 ```
 
-The direct binary uses its own embedded PHP runtime. Required WatchState extensions were validated under FrankenPHP's PHP runtime.
-
-Required extension validation result:
+Required WatchState extensions were validated under FrankenPHP's PHP runtime:
 
 ```text
 PDO: yes
@@ -50,33 +44,9 @@ openssl: yes
 zip: yes
 ```
 
-The WatchState console was validated through FrankenPHP:
+The WatchState console was validated through FrankenPHP and console help listed normally.
 
-```text
-cd /opt/app && WS_DATA_PATH=/config /opt/bin/frankenphp php-cli bin/console --help
-```
-
-Observed result:
-
-- Console help listed normally.
-- The command ran successfully as the `watchstate` user.
-
-FrankenPHP web serving was validated manually with:
-
-```text
-cd /opt/app && WS_DATA_PATH=/config /opt/bin/frankenphp php-server --listen 0.0.0.0:8080 --root /opt/app/public
-```
-
-Healthcheck validation result:
-
-```text
-HTTP/1.1 200 OK
-Server: FrankenPHP Caddy
-X-Powered-By: PHP/8.5.8
-{"status":"ok","message":"System is healthy"}
-```
-
-This confirms WatchState runs successfully under FrankenPHP and is ready for systemd service creation.
+FrankenPHP web serving was validated manually. Healthcheck returned healthy through `Server: FrankenPHP Caddy` with `X-Powered-By: PHP/8.5.8`.
 
 ## Snapshot Checkpoint
 
@@ -104,46 +74,45 @@ Checkpoint scope:
 
 ## watchstate-web.service Validation
 
-The production web service unit was created at:
-
-```text
-/etc/systemd/system/watchstate-web.service
-```
-
-The service unit is tracked in the repository at:
-
-```text
-systemd/watchstate-web.service
-```
+The production web service unit was created at `/etc/systemd/system/watchstate-web.service` and is tracked in the repository at `systemd/watchstate-web.service`.
 
 Service status after enable/start:
 
 ```text
-Loaded: loaded (/etc/systemd/system/watchstate-web.service; enabled)
-Active: active (running)
-Main PID: frankenphp
+Loaded: loaded and enabled
+Active: active running
+Main process: frankenphp
 ```
 
-Runtime command:
-
-```text
-/opt/bin/frankenphp php-server --listen 0.0.0.0:8080 --root /opt/app/public
-```
-
-Healthcheck validation through the systemd service:
-
-```text
-HTTP/1.1 200 OK
-Server: FrankenPHP Caddy
-X-Powered-By: PHP/8.5.8
-{"status":"ok","message":"System is healthy"}
-```
+Healthcheck validation through the systemd service returned healthy through FrankenPHP Caddy with PHP 8.5.8.
 
 Observed service log notes:
 
 - `admin endpoint disabled` is expected for this command mode.
-- `HTTP/2 skipped because it requires TLS` is expected while serving plain HTTP on port 8080.
-- `HTTP/3 skipped because it requires TLS` is expected while serving plain HTTP on port 8080.
+- HTTP/2 and HTTP/3 skipped warnings are expected while serving plain HTTP on port 8080.
+
+## watchstate-scheduler.service Validation
+
+The scheduler service unit was created at `/etc/systemd/system/watchstate-scheduler.service` and is tracked in the repository at `systemd/watchstate-scheduler.service`.
+
+The unit reproduces the upstream scheduler loop using FrankenPHP's PHP CLI runtime.
+
+Service status after enable/start:
+
+```text
+Loaded: loaded and enabled
+Active: active running
+Main process: bash
+Child process: frankenphp php-cli running WatchState scheduler
+```
+
+Runtime PID file validation:
+
+```text
+/tmp/ws-job-runner.pid exists and is owned by watchstate:watchstate
+```
+
+This confirms the native scheduler service starts and runs under systemd.
 
 ## Proposed Native Services
 
@@ -155,40 +124,13 @@ Purpose:
 
 - Run the WatchState web application through FrankenPHP.
 
-Expected command model:
-
-```text
-/opt/bin/frankenphp php-server --listen 0.0.0.0:8080 --root /opt/app/public
-```
-
-Expected service user:
-
-```text
-watchstate
-```
-
-Expected environment:
-
-```text
-WS_DATA_PATH=/config
-WS_TZ=UTC
-PATH=/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-```
-
 ### watchstate-scheduler.service
+
+Status: created, enabled, running, and validated.
 
 Purpose:
 
 - Reproduce the upstream scheduler loop from `container/files/runner.sh`.
-
-Expected command behavior:
-
-```text
-while true; do
-  /opt/bin/console system:scheduler --pid-file /tmp/ws-job-runner.pid
-  sleep 60
-done
-```
 
 ### redis-server.service
 
@@ -208,10 +150,10 @@ Complete.
 - Healthcheck validated through FrankenPHP.
 - Snapshot checkpoint completed before systemd service creation.
 - `watchstate-web.service` created and validated.
+- `watchstate-scheduler.service` created and validated.
 
 ## Deferred Items
 
-- `watchstate-scheduler.service`.
 - Reverse proxy configuration.
 - TLS certificates.
 - External Redis.
