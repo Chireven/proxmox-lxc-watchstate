@@ -1,0 +1,21 @@
+# Local editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Runtime/generated files
+*.log
+*.tmp
+*.bak
+
+# Local environment files
+.env
+*.env.local
+
+# Test output
+coverage/
