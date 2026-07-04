@@ -77,12 +77,28 @@ Operational note:
 - Git checks should normally be run as the `watchstate` user using `runuser -u watchstate -- git -C /opt/app ...`.
 - Running Git against `/opt/app` as root triggers Git's dubious ownership protection, which is expected and should not be bypassed unless needed for a specific administrative reason.
 
+## Console Symlink Result
+
+Created the upstream-aligned helper symlink:
+
+```text
+/opt/bin/console -> /opt/app/bin/console
+```
+
+Validation:
+
+```text
+lrwxrwxrwx 1 watchstate watchstate ... /opt/bin/console -> /opt/app/bin/console
+readlink -f /opt/bin/console = /opt/app/bin/console
+console symlink executable
+```
+
 ## Planned Steps
 
 1. Clone upstream source into `/opt/app`. Done.
 2. Record upstream commit hash. Done.
 3. Confirm source files expected from upstream analysis exist. Done.
-4. Create helper symlink `/opt/bin/console` to `/opt/app/bin/console`.
+4. Create helper symlink `/opt/bin/console` to `/opt/app/bin/console`. Done.
 5. Run Composer dependency install as `watchstate` if possible.
 6. Run frontend dependency install/build with Bun.
 7. Run application console validation.
