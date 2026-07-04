@@ -81,15 +81,18 @@ This repository is public. Keep deployment-specific runtime data out of version 
 ## Phase 8 - Operations
 
 - [x] Write backup procedure.
+- [x] Produce backup script.
 - [x] Validate backup script.
+- [x] Add backup listing and retention.
 - [x] Validate restore into a clean scratch CT.
 - [x] Write update procedure.
 - [x] Validate update procedure.
+- [x] Produce verification script.
+- [x] Validate verification script.
 - [ ] Write uninstall/rollback notes.
 - [ ] Write troubleshooting guide.
 - [ ] Produce install script.
 - [ ] Produce update script.
-- [ ] Produce verification script.
 
 ## Current State
 
@@ -99,9 +102,11 @@ Two Plex backends have been configured from the WatchState UI. Backup and Import
 
 Cron validation found no crontab for the WatchState service user and no WatchState-specific cron entries in the standard cron directories. The scheduler is handled by the enabled and running `watchstate-scheduler.service` unit.
 
-Backup and restore operations are validated. The host-side backup script creates archives for `/config`, native service units, FrankenPHP, and the app tree. A clean scratch CT restore was validated successfully and then removed.
+Backup and restore operations are validated. The host-side backup script creates archives for `/config`, native service units, FrankenPHP, and the app tree. A clean scratch CT restore was validated successfully and then removed. The backup script now supports CT name discovery, backup listing, prune-only mode, dry-run pruning, and count-based retention with a default of 14 timestamp-style backup directories.
 
 The native update procedure is validated. Required corrections discovered during testing are documented: `rsync` must be installed, frontend output must be synced from `/opt/app/frontend/exported` to `/opt/app/public/exported`, and database migrations must use `db:migrate --execute --no-interaction`.
+
+The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, and frontend output.
 
 Current validated services:
 
@@ -141,4 +146,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Choose the next workstream: uninstall/rollback notes, troubleshooting guide, reverse proxy/TLS, install script, update script, verification script, or final install documentation.
+Choose the next workstream: update script, uninstall/rollback notes, troubleshooting guide, reverse proxy/TLS, install script, or final install documentation.
