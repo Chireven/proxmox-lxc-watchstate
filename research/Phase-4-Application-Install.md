@@ -93,13 +93,56 @@ readlink -f /opt/bin/console = /opt/app/bin/console
 console symlink executable
 ```
 
+## Composer Dependency Result
+
+Composer platform validation succeeded before installing dependencies from the lock file.
+
+Initial check:
+
+- No `vendor` directory was present yet.
+- Composer checked platform requirements from `composer.lock`.
+- All required PHP platform requirements succeeded.
+
+Composer install command model:
+
+```text
+runuser -u watchstate -- composer install --working-dir=/opt/app --no-dev --prefer-dist --no-interaction --optimize-autoloader
+```
+
+Install result:
+
+- 39 package installs
+- 0 updates
+- 0 removals
+- Optimized autoload files generated
+- `/opt/app/vendor` created and owned by `watchstate:watchstate`
+
+Post-install platform validation succeeded against the installed vendor directory.
+
+Validated platform requirements include:
+
+- ext-ctype
+- ext-curl
+- ext-fileinfo
+- ext-json
+- ext-mbstring
+- ext-openssl
+- ext-pdo
+- ext-pdo_sqlite
+- ext-posix
+- ext-redis
+- ext-simplexml
+- ext-sodium
+- ext-zip
+- php 8.4.23
+
 ## Planned Steps
 
 1. Clone upstream source into `/opt/app`. Done.
 2. Record upstream commit hash. Done.
 3. Confirm source files expected from upstream analysis exist. Done.
 4. Create helper symlink `/opt/bin/console` to `/opt/app/bin/console`. Done.
-5. Run Composer dependency install as `watchstate` if possible.
+5. Run Composer dependency install as `watchstate` if possible. Done.
 6. Run frontend dependency install/build with Bun.
 7. Run application console validation.
 8. Run upstream initialization commands manually before service creation.
