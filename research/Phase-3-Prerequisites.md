@@ -45,7 +45,7 @@ The first package group covers operating system utilities and non-PHP runtime to
 - iproute2
 - tzdata
 
-## Validation Result
+## First Validation Result
 
 Validated successfully on the Debian 13 LXC baseline.
 
@@ -68,6 +68,70 @@ Redis service status:
 
 Fontconfig validation succeeded with fonts visible through `fc-list`.
 
+## PHP Runtime Install Group
+
+Installed Debian PHP 8.4 runtime packages:
+
+- php-cli
+- php-fpm
+- php-sqlite3
+- php-mbstring
+- php-curl
+- php-xml
+- php-zip
+- php-redis
+
+## PHP Runtime Validation Result
+
+Validated successfully.
+
+Observed PHP version:
+
+```text
+PHP 8.4.23 CLI
+Zend OPcache 8.4.23
+```
+
+Required WatchState extensions confirmed present:
+
+- PDO
+- pdo_sqlite
+- mbstring
+- ctype
+- curl
+- sodium
+- SimpleXML
+- fileinfo
+- redis
+- posix
+- openssl
+- zip
+
+Additional useful modules observed:
+
+- dom
+- xml
+- xmlreader
+- xmlwriter
+- xsl
+- sqlite3
+- sockets
+- pcntl
+- opcache
+
+PHP configuration path:
+
+```text
+/etc/php/8.4/cli/php.ini
+/etc/php/8.4/cli/conf.d
+```
+
+PHP-FPM service status:
+
+- `php8.4-fpm.service` enabled
+- `php8.4-fpm.service` active and running
+- Ready to handle connections
+
 ## Deferred Items
 
 Do not install these until the next validation step:
@@ -84,4 +148,4 @@ After the full prerequisite phase validates cleanly, create a Proxmox snapshot b
 
 ## Next Step
 
-Validate the PHP runtime path. WatchState requires PHP 8.4 and specific extensions. The next decision is whether to use standalone FrankenPHP as the PHP runtime, matching upstream, or Debian PHP packages plus a traditional web server.
+Install and validate Composer, then use Composer platform checks later to confirm the WatchState dependency requirements are satisfied by Debian PHP.
