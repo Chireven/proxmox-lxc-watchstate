@@ -102,9 +102,54 @@ Checkpoint scope:
 - FrankenPHP healthcheck validated.
 - No native WatchState systemd units created yet.
 
+## watchstate-web.service Validation
+
+The production web service unit was created at:
+
+```text
+/etc/systemd/system/watchstate-web.service
+```
+
+The service unit is tracked in the repository at:
+
+```text
+systemd/watchstate-web.service
+```
+
+Service status after enable/start:
+
+```text
+Loaded: loaded (/etc/systemd/system/watchstate-web.service; enabled)
+Active: active (running)
+Main PID: frankenphp
+```
+
+Runtime command:
+
+```text
+/opt/bin/frankenphp php-server --listen 0.0.0.0:8080 --root /opt/app/public
+```
+
+Healthcheck validation through the systemd service:
+
+```text
+HTTP/1.1 200 OK
+Server: FrankenPHP Caddy
+X-Powered-By: PHP/8.5.8
+{"status":"ok","message":"System is healthy"}
+```
+
+Observed service log notes:
+
+- `admin endpoint disabled` is expected for this command mode.
+- `HTTP/2 skipped because it requires TLS` is expected while serving plain HTTP on port 8080.
+- `HTTP/3 skipped because it requires TLS` is expected while serving plain HTTP on port 8080.
+
 ## Proposed Native Services
 
 ### watchstate-web.service
+
+Status: created, enabled, running, and validated.
 
 Purpose:
 
@@ -162,9 +207,11 @@ Complete.
 - WatchState console validated under FrankenPHP.
 - Healthcheck validated through FrankenPHP.
 - Snapshot checkpoint completed before systemd service creation.
+- `watchstate-web.service` created and validated.
 
 ## Deferred Items
 
+- `watchstate-scheduler.service`.
 - Reverse proxy configuration.
 - TLS certificates.
 - External Redis.
