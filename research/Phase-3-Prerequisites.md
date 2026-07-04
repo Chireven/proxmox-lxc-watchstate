@@ -204,9 +204,49 @@ Observed path:
 
 `bun --help` returned normal command help.
 
+## Service User
+
+Created a dedicated WatchState service user matching the upstream Docker UID/GID convention.
+
+Observed identity:
+
+```text
+uid=1000(watchstate) gid=1000(watchstate) groups=1000(watchstate)
+```
+
+Observed passwd entry:
+
+```text
+watchstate:x:1000:1000:WatchState service user:/config:/usr/sbin/nologin
+```
+
+## Directory Layout
+
+Created and validated the upstream-aligned native directory layout:
+
+```text
+/config
+/config/backup
+/config/cache
+/config/config
+/config/db
+/config/debug
+/config/logs
+/config/profiler
+/config/webhooks
+/opt/app
+/opt/bin
+/opt/config
+```
+
+Ownership validation:
+
+- All listed paths owned by `watchstate:watchstate`.
+- Top-level runtime paths are mode `0755`.
+
 ## Deferred Items
 
-Do not install these until the next validation step:
+Do not install these until the next phase:
 
 - FrankenPHP
 - WatchState source
@@ -214,8 +254,14 @@ Do not install these until the next validation step:
 
 ## Snapshot Point
 
-After the full prerequisite phase validates cleanly, create a Proxmox snapshot before installing WatchState source or modifying service configuration.
+Phase 3 prerequisite tooling, service user, and directory layout are validated. Create a Proxmox snapshot before installing WatchState source or modifying service configuration.
+
+Suggested snapshot name:
+
+```text
+watchstate-phase-3-prereqs
+```
 
 ## Next Step
 
-Phase 3 prerequisite tooling is validated. The next step is to create a dedicated WatchState service user and directory layout, then snapshot before installing WatchState source.
+Phase 4 should install the WatchState source tree, run Composer dependency validation as the `watchstate` user, and test the application console before creating systemd services.
