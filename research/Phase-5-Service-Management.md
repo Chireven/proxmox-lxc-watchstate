@@ -78,6 +78,30 @@ X-Powered-By: PHP/8.5.8
 
 This confirms WatchState runs successfully under FrankenPHP and is ready for systemd service creation.
 
+## Snapshot Checkpoint
+
+A Proxmox snapshot was taken after FrankenPHP validation and before creating native systemd service units.
+
+Snapshot name:
+
+```text
+watchstate-phase-5-frankenphp-validated
+```
+
+Checkpoint scope:
+
+- WatchState source installed.
+- Composer dependencies installed.
+- Frontend dependencies installed.
+- Frontend generated and copied to `/opt/app/public/exported`.
+- Application initialized under `/config`.
+- SQLite database created and migrated.
+- Redis validated.
+- FrankenPHP binary installed.
+- FrankenPHP PHP runtime validated.
+- FrankenPHP healthcheck validated.
+- No native WatchState systemd units created yet.
+
 ## Proposed Native Services
 
 ### watchstate-web.service
@@ -137,6 +161,7 @@ Complete.
 - WatchState required extensions validated under FrankenPHP.
 - WatchState console validated under FrankenPHP.
 - Healthcheck validated through FrankenPHP.
+- Snapshot checkpoint completed before systemd service creation.
 
 ## Deferred Items
 
