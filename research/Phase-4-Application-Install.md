@@ -195,6 +195,26 @@ Redis validation:
 redis-cli ping = PONG
 ```
 
+## Manual Web Validation
+
+The application was started manually with PHP's built-in web server before creating systemd units.
+
+Command model:
+
+```text
+cd /opt/app && WS_DATA_PATH=/config php -S 0.0.0.0:8080 -t public public/index.php
+```
+
+Validation results from inside the container:
+
+- `GET /` returned `HTTP/1.1 200 OK`.
+- The returned HTML included the WatchState loading app markup.
+- `GET /v1/api/system/healthcheck` returned `HTTP/1.1 200 OK`.
+- Healthcheck response body was `{"status":"ok","message":"System is healthy"}`.
+- Response header included `X-Application-Version: dev-master`.
+
+This confirms the PHP runtime, public asset copy, application routing, and healthcheck endpoint work under manual execution.
+
 ## Planned Steps
 
 1. Clone upstream source into `/opt/app`. Done.
@@ -206,10 +226,11 @@ redis-cli ping = PONG
 7. Run application console validation. Done.
 8. Run upstream initialization commands manually before service creation. Done.
 9. Validate generated runtime state. Done.
+10. Validate manual web startup and healthcheck. Done.
 
 ## Deferred Items
 
-Do not create these until manual web validation is complete:
+Do not create these until native service design is complete:
 
 - `watchstate-web.service`
 - `watchstate-scheduler.service`
