@@ -17,7 +17,7 @@ This project documents and automates a native WatchState installation for Proxmo
 - [x] Identify runtime dependencies.
 - [x] Identify persistent storage paths.
 - [x] Identify scheduler behavior.
-- [ ] Identify update assumptions.
+- [x] Identify update assumptions.
 - [x] Draft native runtime blueprint.
 
 ## Phase 2 - LXC Baseline
@@ -76,4 +76,4 @@ This project documents and automates a native WatchState installation for Proxmo
 
 ## Current Next Step
 
-Finish Phase 1 by documenting update assumptions, then move to Phase 2 and create the fresh Debian LXC baseline.
+Begin Phase 2 by creating a fresh Debian 13 LXC baseline with no media bind mounts and no WatchState packages installed yet.
