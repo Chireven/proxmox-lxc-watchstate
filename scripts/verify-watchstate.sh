@@ -8,17 +8,20 @@ Usage: verify-watchstate.sh [options]
 Verify the native WatchState LXC deployment from the Proxmox host.
 
 Options:
-  --ctid <id>      Proxmox CT ID. Default: 103
+  --ctid <id>      Proxmox CT ID. Overrides name discovery.
+  --name <name>    Proxmox CT name to discover. Default: watchstate
   --json           Emit a compact JSON-like summary at the end
   -h, --help       Show this help
 
 Examples:
   ./scripts/verify-watchstate.sh
+  ./scripts/verify-watchstate.sh --name watchstate
   ./scripts/verify-watchstate.sh --ctid 103
 USAGE
 }
 
-CTID="103"
+CTID=""
+CT_NAME="watchstate"
 EMIT_JSON="0"
 FAILURES=0
 WARNINGS=0
@@ -27,6 +30,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --ctid)
       CTID="${2:-}"
+      shift 2
+      ;;
+    --name)
+      CT_NAME="${2:-}"
       shift 2
       ;;
     --json)
@@ -45,8 +52,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${CTID}" ]]; then
-  echo "ERROR: --ctid cannot be empty." >&2
+if [[ -z "${CT_NAME}" && -z "${CTID}" ]]; then
+  echo "ERROR: --name cannot be empty when --ctid is not supplied." >&2
   exit 2
 fi
 
@@ -69,6 +76,30 @@ section() {
   echo "== $* =="
 }
 
+resolve_ctid() {
+  if [[ -n "${CTID}" ]]; then
+    return
+  fi
+
+  local matches match_count
+  matches="$(pct list | awk -v name="${CT_NAME}" 'NR > 1 && $NF == name {print $1}')"
+  match_count="$(printf '%s\n' "${matches}" | sed '/^$/d' | wc -l | awk '{print $1}')"
+
+  if [[ "${match_count}" == "0" ]]; then
+    echo "ERROR: No CT named '${CT_NAME}' was found. Pass --ctid <id> or --name <name>." >&2
+    exit 1
+  fi
+
+  if [[ "${match_count}" != "1" ]]; then
+    echo "ERROR: Multiple CTs named '${CT_NAME}' were found. Pass --ctid <id>." >&2
+    printf '%s\n' "${matches}" >&2
+    exit 1
+  fi
+
+  CTID="${matches}"
+  echo "Discovered CT '${CT_NAME}' as CTID ${CTID}."
+}
+
 run_ct() {
   pct exec "${CTID}" -- "$@"
 }
@@ -86,6 +117,8 @@ check_host() {
     echo "ERROR: pct was not found. Run this script on the Proxmox host." >&2
     exit 1
   fi
+
+  resolve_ctid
 
   if pct status "${CTID}" >/dev/null 2>&1; then
     pass "CT ${CTID} exists"
@@ -307,7 +340,7 @@ echo "Warnings: ${WARNINGS}"
 echo "Failures: ${FAILURES}"
 
 if [[ "${EMIT_JSON}" == "1" ]]; then
-  printf '{"ctid":"%s","warnings":%s,"failures":%s}\n' "${CTID}" "${WARNINGS}" "${FAILURES}"
+  printf '{"ctid":"%s","name":"%s","warnings":%s,"failures":%s}\n' "${CTID}" "${CT_NAME}" "${WARNINGS}" "${FAILURES}"
 fi
 
 if [[ "${FAILURES}" -gt 0 ]]; then
