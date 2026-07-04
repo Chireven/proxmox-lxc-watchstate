@@ -136,6 +136,38 @@ Observed result:
 - `bin/console -q` returned to the prompt with no errors.
 - This confirms the PHP dependency install, console entry point, and `/config` data path are usable at a basic level.
 
+## Manual Initialization Result
+
+Before running the upstream-style initialization sequence, `/config` already contained application-created paths and the SQLite database:
+
+```text
+/config/db/watchstate_v02.db
+/config/console
+/config/queue
+/config/users
+```
+
+No files were present under `/config/logs` or `/config/debug` at the time of inspection.
+
+The following upstream-style initialization commands were run as the `watchstate` user with `WS_DATA_PATH=/config`:
+
+```text
+WS_CACHE_NULL=1 php bin/console -q
+php bin/console system:routes
+php bin/console events:cache
+php bin/console db:legacy --execute
+CONTAINER_INIT=1 php bin/console db:migrate --execute
+php bin/console db:maintenance
+php bin/console db:index
+php bin/console system:apikey -q
+```
+
+Observed result:
+
+- Most commands returned to the prompt with no output or errors.
+- `db:migrate --execute` reported: `main: Applied 1 migration(s).`
+- No secrets or generated API key values were printed to the terminal.
+
 ## Planned Steps
 
 1. Clone upstream source into `/opt/app`. Done.
@@ -145,11 +177,11 @@ Observed result:
 5. Run Composer dependency install as `watchstate` if possible. Done.
 6. Run frontend dependency install/build with Bun. Done.
 7. Run application console validation. Done.
-8. Run upstream initialization commands manually before service creation.
+8. Run upstream initialization commands manually before service creation. Done.
 
 ## Deferred Items
 
-Do not create these until console and manual startup validation are complete:
+Do not create these until manual web validation is complete:
 
 - `watchstate-web.service`
 - `watchstate-scheduler.service`
