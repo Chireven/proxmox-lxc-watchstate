@@ -106,4 +106,48 @@ frontend output presence
 
 The script exits non-zero if any required check fails. Warnings do not fail the script but should be reviewed.
 
+## update-watchstate.sh
+
+Updates the native WatchState LXC deployment from the Proxmox host.
+
+Run from the Proxmox host:
+
+```bash
+chmod +x scripts/update-watchstate.sh
+./scripts/update-watchstate.sh
+```
+
+If no CT ID is supplied, the script looks for a Proxmox CT named `watchstate`.
+
+Default behavior:
+
+```text
+runs backup-watchstate.sh first
+creates a Proxmox snapshot
+stops WatchState web/scheduler services
+fast-forwards origin/master
+runs Composer install
+runs Bun install
+regenerates frontend output
+syncs frontend/exported to public/exported
+executes database migrations
+runs database index/cache maintenance
+restarts services
+runs verify-watchstate.sh
+```
+
+Common options:
+
+```bash
+./scripts/update-watchstate.sh --name watchstate
+./scripts/update-watchstate.sh --ctid 103
+./scripts/update-watchstate.sh --branch master
+./scripts/update-watchstate.sh --backup-root /mnt/backups/watchstate
+./scripts/update-watchstate.sh --skip-snapshot
+./scripts/update-watchstate.sh --skip-backup
+./scripts/update-watchstate.sh --skip-verify
+```
+
+The update script is based on the validated Phase 9 update procedure. Test it during a maintenance window before treating it as production automation.
+
 Do not commit generated backup archives or copied runtime data to this repository.
