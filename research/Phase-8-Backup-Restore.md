@@ -171,6 +171,21 @@ active
 {"status":"ok","message":"System is healthy"}
 ```
 
+## Manual Backup Validation Result
+
+The manual backup procedure was run successfully from the Proxmox host.
+
+Post-backup service validation returned:
+
+```text
+active
+active
+active
+{"status":"ok","message":"System is healthy"}
+```
+
+This confirms that the backup sequence can stop the WatchState services, create/pull backup archives, restart the services, and return the application to a healthy state.
+
 ## Proxmox Snapshot Procedure
 
 Application-level backups should be paired with Proxmox snapshots at major milestones.
@@ -228,7 +243,6 @@ curl -fsS http://127.0.0.1:8080/v1/api/system/healthcheck
 
 ## Open Validation Items
 
-- Run the manual backup once and confirm archive creation.
 - Confirm archive ownership and permissions are preserved after extraction in a test restore or scratch container.
 - Decide whether `/opt/app` is always backed up or rebuilt from upstream during restore.
 - Decide retention location and retention policy for host-side backup archives.
