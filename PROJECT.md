@@ -4,9 +4,7 @@ This project documents and automates a native WatchState installation for Proxmo
 
 ## Public Repository Safety
 
-This repository is public. Do not commit secrets or private deployment data. Use placeholders for tokens, passwords, internal URLs, private keys, certificates, real application config, database files, and logs that may contain sensitive values.
-
-Never print, copy, or commit the live contents of `/config/config/.env`, `/config/config/servers.yaml` after real servers are added, `/config/db/watchstate_v02.db`, certificates, private keys, API keys, logs, or private hostnames/URLs.
+This repository is public. Keep deployment-specific runtime data out of version control and use placeholders in documentation.
 
 ## Phase 0 - Project Foundation
 
@@ -67,8 +65,8 @@ Never print, copy, or commit the live contents of `/config/config/.env`, `/confi
 
 - [x] Confirm latest Proxmox snapshot after service validation.
 - [x] Complete first web login.
-- [ ] Configure WatchState from UI.
-- [ ] Enable scheduled tasks from UI.
+- [x] Configure WatchState from UI.
+- [x] Enable scheduled tasks from UI.
 - [ ] Confirm no manual cron is required.
 - [ ] Decide whether Debian `redis-server` remains the supported native Redis model.
 
@@ -76,7 +74,7 @@ Never print, copy, or commit the live contents of `/config/config/.env`, `/confi
 
 - [ ] Add Proxmox bind mounts after app is healthy.
 - [ ] Verify read-only/read-write requirements.
-- [ ] Validate Plex/Jellyfin connectivity.
+- [x] Validate Plex/Jellyfin connectivity.
 - [ ] Validate library scan behavior.
 
 ## Phase 8 - Operations
@@ -91,7 +89,9 @@ Never print, copy, or commit the live contents of `/config/config/.env`, `/confi
 
 ## Current State
 
-WatchState is installed natively in Debian LXC CT 103 with persistent runtime data under `/config`. Composer dependencies are installed, frontend assets are built and copied to `/opt/app/public/exported`, the application has been initialized, the SQLite database has been created and migrated, Debian Redis responds to `PONG`, FrankenPHP is installed at `/opt/bin/frankenphp`, and both native WatchState services are enabled, running, and reboot-validated. The post-service snapshot exists and first web login has been completed.
+WatchState is installed natively in Debian LXC CT 103. Composer dependencies are installed, frontend assets are built, the application has been initialized, Redis responds to PONG, FrankenPHP is installed, and both native WatchState services are enabled, running, and reboot-validated. The post-service snapshot exists and first web login has been completed.
+
+Two Plex backends have been configured from the WatchState UI. Backup and Import jobs were created for both backends and completed successfully. Import and Export tasks are visible in the UI and enabled.
 
 Current validated services:
 
@@ -119,4 +119,4 @@ watchstate-phase-5-services-validated
 
 ## Current Next Step
 
-Continue Phase 6 by configuring WatchState from the UI. Confirm scheduled tasks are enabled inside WatchState and that no manually managed cron jobs are required.
+Continue Phase 6 by confirming no manually managed cron jobs are required. Then decide whether Debian `redis-server` remains the supported native Redis model for this LXC deployment.
