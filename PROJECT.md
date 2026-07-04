@@ -69,6 +69,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Enable scheduled tasks from UI.
 - [x] Confirm no manual cron is required.
 - [x] Decide whether Debian `redis-server` remains the supported native Redis model.
+- [x] Snapshot validated Phase 6 application configuration.
 
 ## Phase 7 - Media Integration
 
@@ -119,6 +120,12 @@ Confirmed snapshot checkpoint after service validation:
 watchstate-phase-5-services-validated
 ```
 
+Confirmed snapshot checkpoint after Phase 6 application configuration:
+
+```text
+watchstate-phase-6-app-configured
+```
+
 ## Current Next Step
 
-Take a post-configuration snapshot before moving to reverse proxy, TLS, backup, restore, and update procedure work.
+Choose the next workstream: reverse proxy/TLS, backup and restore procedure, update procedure, or install documentation.
