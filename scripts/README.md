@@ -29,4 +29,17 @@ Common options:
 ./scripts/backup-watchstate.sh --keep-tmp
 ```
 
-After running, confirm the script reports all services active and the WatchState healthcheck returns healthy.
+The script has been validated against the native WatchState LXC deployment. A successful run should report all services active and the WatchState healthcheck should return healthy.
+
+Expected successful service/healthcheck result:
+
+```text
+active
+active
+active
+{"status":"ok","message":"System is healthy"}
+```
+
+The generated archives were also validated by restoring them into a clean scratch CT and confirming Redis, the WatchState web service, the scheduler service, and the API healthcheck returned healthy.
+
+Do not commit generated backup archives or copied runtime data to this repository.
