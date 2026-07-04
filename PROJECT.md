@@ -66,7 +66,7 @@ Never print, copy, or commit the live contents of `/config/config/.env`, `/confi
 ## Phase 6 - Application Configuration
 
 - [x] Confirm latest Proxmox snapshot after service validation.
-- [ ] Complete first web login.
+- [x] Complete first web login.
 - [ ] Configure WatchState from UI.
 - [ ] Enable scheduled tasks from UI.
 - [ ] Confirm no manual cron is required.
@@ -91,7 +91,7 @@ Never print, copy, or commit the live contents of `/config/config/.env`, `/confi
 
 ## Current State
 
-WatchState is installed natively in Debian LXC CT 103 with persistent runtime data under `/config`. Composer dependencies are installed, frontend assets are built and copied to `/opt/app/public/exported`, the application has been initialized, the SQLite database has been created and migrated, Debian Redis responds to `PONG`, FrankenPHP is installed at `/opt/bin/frankenphp`, and both native WatchState services are enabled, running, and reboot-validated.
+WatchState is installed natively in Debian LXC CT 103 with persistent runtime data under `/config`. Composer dependencies are installed, frontend assets are built and copied to `/opt/app/public/exported`, the application has been initialized, the SQLite database has been created and migrated, Debian Redis responds to `PONG`, FrankenPHP is installed at `/opt/bin/frankenphp`, and both native WatchState services are enabled, running, and reboot-validated. The post-service snapshot exists and first web login has been completed.
 
 Current validated services:
 
@@ -119,4 +119,4 @@ watchstate-phase-5-services-validated
 
 ## Current Next Step
 
-Begin Phase 6 by completing the first WatchState web login and configuring the application from the UI. Confirm scheduled tasks are enabled inside WatchState and that no manually managed cron jobs are required.
+Continue Phase 6 by configuring WatchState from the UI. Confirm scheduled tasks are enabled inside WatchState and that no manually managed cron jobs are required.
