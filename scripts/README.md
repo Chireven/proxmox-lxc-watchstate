@@ -21,6 +21,7 @@ Default settings:
 CT name: watchstate
 backup root: /root/watchstate-backups
 include app tree: yes
+retention: keep latest 14 backup directories
 ```
 
 Common options:
@@ -31,6 +32,26 @@ Common options:
 ./scripts/backup-watchstate.sh --no-app
 ./scripts/backup-watchstate.sh --keep-tmp
 ```
+
+Retention and listing options:
+
+```bash
+./scripts/backup-watchstate.sh --list
+./scripts/backup-watchstate.sh --keep 30
+./scripts/backup-watchstate.sh --keep 0
+./scripts/backup-watchstate.sh --prune-only
+./scripts/backup-watchstate.sh --prune-only --prune-dry-run
+```
+
+Retention is count-based, not age-based. By default, the script keeps the latest 14 timestamp-style backup directories under the selected backup root and prunes older matching directories after a successful backup. Use `--keep 0` to disable pruning.
+
+The prune logic only targets directories with names matching this timestamp format:
+
+```text
+YYYYMMDD-HHMMSS
+```
+
+The script refuses to prune directly under broad system paths such as `/`, `/root`, `/mnt`, `/var`, `/opt`, `/etc`, or `/usr`. Use a dedicated backup root such as `/root/watchstate-backups` or `/mnt/backups/watchstate`.
 
 The script has been validated against the native WatchState LXC deployment. A successful run should report all services active and the WatchState healthcheck should return healthy.
 
