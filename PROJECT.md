@@ -7,17 +7,18 @@ This project documents and automates a native WatchState installation for Proxmo
 - [x] Create GitHub repository.
 - [x] Bootstrap initial README.
 - [x] Create repository structure.
-- [ ] Establish initial project documentation.
+- [x] Establish initial project documentation.
 
 ## Phase 1 - Upstream Analysis
 
-- [ ] Review upstream Dockerfile.
-- [ ] Review upstream compose examples.
-- [ ] Identify build-time dependencies.
-- [ ] Identify runtime dependencies.
-- [ ] Identify persistent storage paths.
-- [ ] Identify scheduler behavior.
+- [x] Review upstream Dockerfile.
+- [x] Review upstream compose examples.
+- [x] Identify build-time dependencies.
+- [x] Identify runtime dependencies.
+- [x] Identify persistent storage paths.
+- [x] Identify scheduler behavior.
 - [ ] Identify update assumptions.
+- [x] Draft native runtime blueprint.
 
 ## Phase 2 - LXC Baseline
 
@@ -75,4 +76,4 @@ This project documents and automates a native WatchState installation for Proxmo
 
 ## Current Next Step
 
-Begin Phase 1 by analyzing the upstream WatchState Docker image and documented deployment path.
+Finish Phase 1 by documenting update assumptions, then move to Phase 2 and create the fresh Debian LXC baseline.
