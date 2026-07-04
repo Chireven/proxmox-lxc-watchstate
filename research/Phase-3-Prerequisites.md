@@ -162,12 +162,24 @@ Note: Debian Composer reports a warning that Composer's own `installed.json` is 
 
 Operational note: Composer validation was run as root with `COMPOSER_ALLOW_SUPERUSER=1`. Future application dependency installs should run as the dedicated WatchState service user where practical.
 
+## Bun Package Availability
+
+Debian 13 default repositories do not provide a `bun` package.
+
+Observed result:
+
+```text
+apt-cache policy bun
+N: Unable to locate package bun
+```
+
+Decision: install Bun from upstream for build-time frontend asset generation, then validate it before using it with WatchState.
+
 ## Deferred Items
 
 Do not install these until the next validation step:
 
 - FrankenPHP
-- Bun
 - WatchState source
 - systemd service files
 
@@ -177,4 +189,4 @@ After the full prerequisite phase validates cleanly, create a Proxmox snapshot b
 
 ## Next Step
 
-Install and validate Bun for frontend asset generation.
+Install and validate Bun for frontend asset generation using the upstream Bun installer.
