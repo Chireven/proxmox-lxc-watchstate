@@ -97,10 +97,27 @@ Result:
 - Fonts downloaded and cached
 - Static frontend generated under `/opt/app/frontend/exported`
 
-Native install note:
+## Frontend Public Asset Copy Result
 
-- Upstream Docker copies generated frontend output into `/opt/app/public/exported`.
-- Native install must explicitly copy `/opt/app/frontend/exported` to `/opt/app/public/exported` after `bun run generate`.
+Copied the generated frontend from:
+
+```text
+/opt/app/frontend/exported
+```
+
+To the upstream-aligned application public path:
+
+```text
+/opt/app/public/exported
+```
+
+Validation result:
+
+- `/opt/app/public/exported` exists.
+- `/opt/app/public/exported` is owned by `watchstate:watchstate`.
+- `index.html` exists.
+- `200.html` exists.
+- Static route files and image/font assets are present.
 
 ## Planned Steps
 
@@ -109,7 +126,7 @@ Native install note:
 3. Confirm source files expected from upstream analysis exist. Done.
 4. Create helper symlink `/opt/bin/console` to `/opt/app/bin/console`. Done.
 5. Run Composer dependency install as `watchstate` if possible. Done.
-6. Run frontend dependency install/build with Bun. Build done; copy generated output into app public path next.
+6. Run frontend dependency install/build with Bun. Done.
 7. Run application console validation.
 8. Run upstream initialization commands manually before service creation.
 
