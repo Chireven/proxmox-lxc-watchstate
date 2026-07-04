@@ -67,7 +67,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Complete first web login.
 - [x] Configure WatchState from UI.
 - [x] Enable scheduled tasks from UI.
-- [ ] Confirm no manual cron is required.
+- [x] Confirm no manual cron is required.
 - [ ] Decide whether Debian `redis-server` remains the supported native Redis model.
 
 ## Phase 7 - Media Integration
@@ -92,6 +92,8 @@ This repository is public. Keep deployment-specific runtime data out of version 
 WatchState is installed natively in Debian LXC CT 103. Composer dependencies are installed, frontend assets are built, the application has been initialized, Redis responds to PONG, FrankenPHP is installed, and both native WatchState services are enabled, running, and reboot-validated. The post-service snapshot exists and first web login has been completed.
 
 Two Plex backends have been configured from the WatchState UI. Backup and Import jobs were created for both backends and completed successfully. Import and Export tasks are visible in the UI and enabled.
+
+Cron validation found no crontab for the WatchState service user and no WatchState-specific cron entries in the standard cron directories. The scheduler is handled by the enabled and running `watchstate-scheduler.service` unit.
 
 Current validated services:
 
@@ -119,4 +121,4 @@ watchstate-phase-5-services-validated
 
 ## Current Next Step
 
-Continue Phase 6 by confirming no manually managed cron jobs are required. Then decide whether Debian `redis-server` remains the supported native Redis model for this LXC deployment.
+Complete Phase 6 by deciding whether Debian `redis-server` remains the supported native Redis model for this LXC deployment. If keeping Debian Redis, take a new post-configuration snapshot before moving to reverse proxy, TLS, backup, restore, and update procedure work.
