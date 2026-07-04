@@ -68,7 +68,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Configure WatchState from UI.
 - [x] Enable scheduled tasks from UI.
 - [x] Confirm no manual cron is required.
-- [ ] Decide whether Debian `redis-server` remains the supported native Redis model.
+- [x] Decide whether Debian `redis-server` remains the supported native Redis model.
 
 ## Phase 7 - Media Integration
 
@@ -121,4 +121,4 @@ watchstate-phase-5-services-validated
 
 ## Current Next Step
 
-Complete Phase 6 by deciding whether Debian `redis-server` remains the supported native Redis model for this LXC deployment. If keeping Debian Redis, take a new post-configuration snapshot before moving to reverse proxy, TLS, backup, restore, and update procedure work.
+Take a post-configuration snapshot before moving to reverse proxy, TLS, backup, restore, and update procedure work.
