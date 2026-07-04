@@ -114,11 +114,26 @@ Runtime PID file validation:
 
 This confirms the native scheduler service starts and runs under systemd.
 
+## Reboot Validation
+
+The container was rebooted after both native services were enabled.
+
+Post-reboot validation result:
+
+```text
+watchstate-web.service: active running
+watchstate-scheduler.service: active running
+healthcheck: HTTP 200 through FrankenPHP Caddy
+scheduler PID file: present and owned by watchstate:watchstate
+```
+
+This confirms both services are enabled correctly and start automatically after reboot.
+
 ## Proposed Native Services
 
 ### watchstate-web.service
 
-Status: created, enabled, running, and validated.
+Status: created, enabled, running, reboot-validated.
 
 Purpose:
 
@@ -126,7 +141,7 @@ Purpose:
 
 ### watchstate-scheduler.service
 
-Status: created, enabled, running, and validated.
+Status: created, enabled, running, reboot-validated.
 
 Purpose:
 
@@ -151,6 +166,7 @@ Complete.
 - Snapshot checkpoint completed before systemd service creation.
 - `watchstate-web.service` created and validated.
 - `watchstate-scheduler.service` created and validated.
+- Both native services reboot-validated.
 
 ## Deferred Items
 
