@@ -168,6 +168,33 @@ Observed result:
 - `db:migrate --execute` reported: `main: Applied 1 migration(s).`
 - No secrets or generated API key values were printed to the terminal.
 
+## Post-Initialization Validation
+
+Validated generated runtime files without printing secret contents.
+
+Observed files:
+
+- `/config/config/servers.yaml` exists and is empty.
+- `/config/config/.env` exists. Contents were not printed or committed.
+- `/config/db/watchstate_v02.db` exists.
+
+Observed database tables:
+
+```text
+events
+migration_lock
+migration_version
+playlist_items
+playlists
+state
+```
+
+Redis validation:
+
+```text
+redis-cli ping = PONG
+```
+
 ## Planned Steps
 
 1. Clone upstream source into `/opt/app`. Done.
@@ -178,6 +205,7 @@ Observed result:
 6. Run frontend dependency install/build with Bun. Done.
 7. Run application console validation. Done.
 8. Run upstream initialization commands manually before service creation. Done.
+9. Validate generated runtime state. Done.
 
 ## Deferred Items
 
