@@ -50,6 +50,15 @@ Run from the Proxmox host:
 
 ```bash
 chmod +x scripts/verify-watchstate.sh
+./scripts/verify-watchstate.sh
+```
+
+If no CT ID is supplied, the script looks for a Proxmox CT named `watchstate`.
+
+Explicit examples:
+
+```bash
+./scripts/verify-watchstate.sh --name watchstate
 ./scripts/verify-watchstate.sh --ctid 103
 ```
 
