@@ -42,4 +42,35 @@ active
 
 The generated archives were also validated by restoring them into a clean scratch CT and confirming Redis, the WatchState web service, the scheduler service, and the API healthcheck returned healthy.
 
+## verify-watchstate.sh
+
+Verifies the native WatchState LXC deployment from the Proxmox host.
+
+Run from the Proxmox host:
+
+```bash
+chmod +x scripts/verify-watchstate.sh
+./scripts/verify-watchstate.sh --ctid 103
+```
+
+The verification script checks:
+
+```text
+container status
+service user/group
+required paths
+systemd enabled/active state
+FrankenPHP version
+Redis PONG
+WatchState healthcheck
+Git branch/remote/status
+required tools
+Composer platform requirements
+WatchState database presence
+migration dry-run status
+frontend output presence
+```
+
+The script exits non-zero if any required check fails. Warnings do not fail the script but should be reviewed.
+
 Do not commit generated backup archives or copied runtime data to this repository.
