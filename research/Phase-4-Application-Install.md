@@ -119,6 +119,23 @@ Validation result:
 - `200.html` exists.
 - Static route files and image/font assets are present.
 
+## Console Validation Result
+
+Application console validation succeeded as the `watchstate` user with `WS_DATA_PATH=/config`.
+
+Validation commands:
+
+```text
+cd /opt/app && WS_DATA_PATH=/config php bin/console --help
+cd /opt/app && WS_DATA_PATH=/config php bin/console -q
+```
+
+Observed result:
+
+- `bin/console --help` listed console usage normally.
+- `bin/console -q` returned to the prompt with no errors.
+- This confirms the PHP dependency install, console entry point, and `/config` data path are usable at a basic level.
+
 ## Planned Steps
 
 1. Clone upstream source into `/opt/app`. Done.
@@ -127,7 +144,7 @@ Validation result:
 4. Create helper symlink `/opt/bin/console` to `/opt/app/bin/console`. Done.
 5. Run Composer dependency install as `watchstate` if possible. Done.
 6. Run frontend dependency install/build with Bun. Done.
-7. Run application console validation.
+7. Run application console validation. Done.
 8. Run upstream initialization commands manually before service creation.
 
 ## Deferred Items
