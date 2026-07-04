@@ -33,11 +33,14 @@ This repository is public. Do not commit secrets or private deployment data. Use
 
 ## Phase 3 - Native Prerequisites
 
-- [ ] Install required OS packages.
-- [ ] Install PHP/runtime dependencies.
-- [ ] Install Composer dependencies.
-- [ ] Install frontend build dependencies if required.
-- [ ] Verify dependency versions.
+- [x] Install required OS packages.
+- [x] Install PHP/runtime dependencies.
+- [x] Install Composer dependencies.
+- [x] Install frontend build dependencies if required.
+- [x] Verify dependency versions.
+- [x] Create dedicated service user.
+- [x] Create upstream-aligned directory layout.
+- [x] Snapshot validated prerequisite state.
 
 ## Phase 4 - Application Installation
 
@@ -80,4 +83,4 @@ This repository is public. Do not commit secrets or private deployment data. Use
 
 ## Current Next Step
 
-Begin Phase 3 by installing and validating the native prerequisite packages for WatchState.
+Begin Phase 4 by cloning the WatchState source tree, installing dependencies as the `watchstate` service user where practical, and validating the application console before creating systemd services.
