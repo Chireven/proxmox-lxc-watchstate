@@ -15,6 +15,69 @@ Rationale:
 - Matching upstream reduces drift between Docker and native LXC behavior.
 - The native project goal is a production-style deployment, not a proof-of-function deployment.
 
+## FrankenPHP Binary Validation
+
+FrankenPHP was installed directly as a binary at:
+
+```text
+/opt/bin/frankenphp
+```
+
+Validated version:
+
+```text
+FrankenPHP v1.12.4
+PHP 8.5.8
+Caddy v2.11.4
+```
+
+The direct binary uses its own embedded PHP runtime. Required WatchState extensions were validated under FrankenPHP's PHP runtime.
+
+Required extension validation result:
+
+```text
+PDO: yes
+pdo_sqlite: yes
+mbstring: yes
+ctype: yes
+curl: yes
+sodium: yes
+SimpleXML: yes
+fileinfo: yes
+redis: yes
+posix: yes
+openssl: yes
+zip: yes
+```
+
+The WatchState console was validated through FrankenPHP:
+
+```text
+cd /opt/app && WS_DATA_PATH=/config /opt/bin/frankenphp php-cli bin/console --help
+```
+
+Observed result:
+
+- Console help listed normally.
+- The command ran successfully as the `watchstate` user.
+
+FrankenPHP web serving was validated manually with:
+
+```text
+cd /opt/app && WS_DATA_PATH=/config /opt/bin/frankenphp php-server --listen 0.0.0.0:8080 --root /opt/app/public
+```
+
+Healthcheck validation result:
+
+```text
+HTTP/1.1 200 OK
+Server: FrankenPHP Caddy
+X-Powered-By: PHP/8.5.8
+{"status":"ok","message":"System is healthy"}
+```
+
+This confirms WatchState runs successfully under FrankenPHP and is ready for systemd service creation.
+
 ## Proposed Native Services
 
 ### watchstate-web.service
@@ -67,10 +130,13 @@ Initial decision:
 
 ## Required Before Creating Services
 
-- Install or obtain a suitable FrankenPHP binary.
-- Validate that the FrankenPHP binary can run PHP CLI commands needed by WatchState.
-- Generate or adopt a production PHP configuration if required.
-- Verify healthcheck through FrankenPHP, not PHP's built-in server.
+Complete.
+
+- FrankenPHP binary installed.
+- FrankenPHP PHP runtime validated.
+- WatchState required extensions validated under FrankenPHP.
+- WatchState console validated under FrankenPHP.
+- Healthcheck validated through FrankenPHP.
 
 ## Deferred Items
 
