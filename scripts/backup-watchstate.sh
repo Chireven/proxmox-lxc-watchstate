@@ -8,20 +8,23 @@ Usage: backup-watchstate.sh [options]
 Create an application-level backup of the native WatchState LXC deployment.
 
 Options:
-  --ctid <id>           Proxmox CT ID. Default: 103
+  --ctid <id>           Proxmox CT ID. Overrides name discovery.
+  --name <name>         Proxmox CT name to discover. Default: watchstate
   --backup-root <path>  Host-side backup root. Default: /root/watchstate-backups
-  --no-app             Do not include /opt/app in the backup
-  --keep-tmp           Keep temporary archives inside the container for inspection
-  -h, --help           Show this help
+  --no-app              Do not include /opt/app in the backup
+  --keep-tmp            Keep temporary archives inside the container for inspection
+  -h, --help            Show this help
 
 Examples:
   ./scripts/backup-watchstate.sh
+  ./scripts/backup-watchstate.sh --name watchstate
   ./scripts/backup-watchstate.sh --ctid 103 --backup-root /mnt/backups/watchstate
   ./scripts/backup-watchstate.sh --no-app
 USAGE
 }
 
-CTID="103"
+CTID=""
+CT_NAME="watchstate"
 BACKUP_ROOT="/root/watchstate-backups"
 INCLUDE_APP="1"
 KEEP_TMP="0"
@@ -30,6 +33,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --ctid)
       CTID="${2:-}"
+      shift 2
+      ;;
+    --name)
+      CT_NAME="${2:-}"
       shift 2
       ;;
     --backup-root)
@@ -56,8 +63,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${CTID}" || -z "${BACKUP_ROOT}" ]]; then
-  echo "ERROR: --ctid and --backup-root cannot be empty." >&2
+if [[ -z "${BACKUP_ROOT}" ]]; then
+  echo "ERROR: --backup-root cannot be empty." >&2
+  exit 2
+fi
+
+if [[ -z "${CT_NAME}" && -z "${CTID}" ]]; then
+  echo "ERROR: --name cannot be empty when --ctid is not supplied." >&2
   exit 2
 fi
 
@@ -65,6 +77,32 @@ if ! command -v pct >/dev/null 2>&1; then
   echo "ERROR: pct was not found. Run this script on the Proxmox host." >&2
   exit 1
 fi
+
+resolve_ctid() {
+  if [[ -n "${CTID}" ]]; then
+    return
+  fi
+
+  local matches match_count
+  matches="$(pct list | awk -v name="${CT_NAME}" 'NR > 1 && $NF == name {print $1}')"
+  match_count="$(printf '%s\n' "${matches}" | sed '/^$/d' | wc -l | awk '{print $1}')"
+
+  if [[ "${match_count}" == "0" ]]; then
+    echo "ERROR: No CT named '${CT_NAME}' was found. Pass --ctid <id> or --name <name>." >&2
+    exit 1
+  fi
+
+  if [[ "${match_count}" != "1" ]]; then
+    echo "ERROR: Multiple CTs named '${CT_NAME}' were found. Pass --ctid <id>." >&2
+    printf '%s\n' "${matches}" >&2
+    exit 1
+  fi
+
+  CTID="${matches}"
+  echo "Discovered CT '${CT_NAME}' as CTID ${CTID}."
+}
+
+resolve_ctid
 
 if ! pct status "${CTID}" >/dev/null 2>&1; then
   echo "ERROR: CT ${CTID} was not found or is not accessible." >&2
@@ -111,6 +149,7 @@ cat > "${BACKUP_DIR}/README.txt" <<EOF
 WatchState LXC backup
 Timestamp UTC: ${STAMP}
 CTID: ${CTID}
+CT name: ${CT_NAME}
 
 This backup may contain private application runtime data. Do not commit these archives to Git.
 EOF
@@ -118,6 +157,7 @@ EOF
 {
   echo "Backup timestamp UTC: ${STAMP}"
   echo "CTID: ${CTID}"
+  echo "CT name: ${CT_NAME}"
   echo
   echo "== Container status =="
   pct status "${CTID}"
@@ -169,6 +209,7 @@ restart_services
 {
   echo "Backup timestamp UTC: ${STAMP}"
   echo "CTID: ${CTID}"
+  echo "CT name: ${CT_NAME}"
   echo
   echo "== Service active state after backup =="
   pct exec "${CTID}" -- systemctl is-active redis-server.service watchstate-web.service watchstate-scheduler.service
