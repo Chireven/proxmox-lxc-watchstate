@@ -11,12 +11,19 @@ Options:
   --ctid <id>           Proxmox CT ID. Overrides name discovery.
   --name <name>         Proxmox CT name to discover. Default: watchstate
   --backup-root <path>  Host-side backup root. Default: /root/watchstate-backups
+  --keep <count>        Keep latest backup directories. Default: 14. Use 0 to disable pruning.
+  --list                List matching backup directories and exit
+  --prune-only          Prune old backup directories and exit without creating a backup
+  --prune-dry-run       Show what pruning would delete without deleting anything
   --no-app              Do not include /opt/app in the backup
   --keep-tmp            Keep temporary archives inside the container for inspection
   -h, --help            Show this help
 
 Examples:
   ./scripts/backup-watchstate.sh
+  ./scripts/backup-watchstate.sh --list
+  ./scripts/backup-watchstate.sh --keep 30
+  ./scripts/backup-watchstate.sh --prune-only --prune-dry-run
   ./scripts/backup-watchstate.sh --name watchstate
   ./scripts/backup-watchstate.sh --ctid 103 --backup-root /mnt/backups/watchstate
   ./scripts/backup-watchstate.sh --no-app
@@ -26,8 +33,13 @@ USAGE
 CTID=""
 CT_NAME="watchstate"
 BACKUP_ROOT="/root/watchstate-backups"
+KEEP_BACKUPS="14"
+LIST_ONLY="0"
+PRUNE_ONLY="0"
+PRUNE_DRY_RUN="0"
 INCLUDE_APP="1"
 KEEP_TMP="0"
+BACKUP_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,6 +54,22 @@ while [[ $# -gt 0 ]]; do
     --backup-root)
       BACKUP_ROOT="${2:-}"
       shift 2
+      ;;
+    --keep)
+      KEEP_BACKUPS="${2:-}"
+      shift 2
+      ;;
+    --list)
+      LIST_ONLY="1"
+      shift
+      ;;
+    --prune-only)
+      PRUNE_ONLY="1"
+      shift
+      ;;
+    --prune-dry-run)
+      PRUNE_DRY_RUN="1"
+      shift
       ;;
     --no-app)
       INCLUDE_APP="0"
@@ -71,6 +99,128 @@ fi
 if [[ -z "${CT_NAME}" && -z "${CTID}" ]]; then
   echo "ERROR: --name cannot be empty when --ctid is not supplied." >&2
   exit 2
+fi
+
+if ! [[ "${KEEP_BACKUPS}" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --keep must be a non-negative integer." >&2
+  exit 2
+fi
+
+resolve_backup_root() {
+  readlink -m "${BACKUP_ROOT}"
+}
+
+validate_backup_root_for_prune() {
+  local resolved
+  resolved="$(resolve_backup_root)"
+
+  case "${resolved}" in
+    /|/root|/home|/mnt|/media|/tmp|/var|/opt|/etc|/usr)
+      echo "ERROR: Refusing to prune directly under unsafe backup root: ${resolved}" >&2
+      echo "Use a dedicated directory such as /root/watchstate-backups or /mnt/backups/watchstate." >&2
+      exit 1
+      ;;
+  esac
+}
+
+list_backup_names() {
+  if [[ ! -d "${BACKUP_ROOT}" ]]; then
+    return 0
+  fi
+
+  find "${BACKUP_ROOT}" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' \
+    | grep -E '^[0-9]{8}-[0-9]{6}$' \
+    | sort -r || true
+}
+
+list_backups() {
+  echo "Backup root: ${BACKUP_ROOT}"
+
+  if [[ ! -d "${BACKUP_ROOT}" ]]; then
+    echo "No backup root exists yet."
+    return 0
+  fi
+
+  local found="0"
+  while IFS= read -r name; do
+    [[ -n "${name}" ]] || continue
+    found="1"
+    local path size
+    path="${BACKUP_ROOT%/}/${name}"
+    size="$(du -sh "${path}" 2>/dev/null | awk '{print $1}' || true)"
+    printf '%s\t%s\t%s\n' "${name}" "${size:-unknown}" "${path}"
+  done < <(list_backup_names)
+
+  if [[ "${found}" == "0" ]]; then
+    echo "No timestamp-style backup directories found."
+  fi
+}
+
+prune_backups() {
+  if [[ "${KEEP_BACKUPS}" == "0" ]]; then
+    echo "Backup pruning disabled (--keep 0)."
+    return 0
+  fi
+
+  validate_backup_root_for_prune
+
+  if [[ ! -d "${BACKUP_ROOT}" ]]; then
+    echo "Backup root does not exist; nothing to prune: ${BACKUP_ROOT}"
+    return 0
+  fi
+
+  mapfile -t backups < <(list_backup_names)
+
+  local total
+  total="${#backups[@]}"
+  echo "Retention policy: keep latest ${KEEP_BACKUPS} backup(s). Found ${total} backup(s)."
+
+  if (( total <= KEEP_BACKUPS )); then
+    echo "No pruning needed."
+    return 0
+  fi
+
+  local current_name=""
+  if [[ -n "${BACKUP_DIR}" ]]; then
+    current_name="$(basename "${BACKUP_DIR}")"
+  fi
+
+  local idx name path
+  for idx in "${!backups[@]}"; do
+    if (( idx < KEEP_BACKUPS )); then
+      continue
+    fi
+
+    name="${backups[$idx]}"
+    path="${BACKUP_ROOT%/}/${name}"
+
+    if [[ -n "${current_name}" && "${name}" == "${current_name}" ]]; then
+      echo "Skipping current backup directory: ${path}"
+      continue
+    fi
+
+    if [[ ! "${name}" =~ ^[0-9]{8}-[0-9]{6}$ ]]; then
+      echo "Skipping non-matching backup directory name: ${path}"
+      continue
+    fi
+
+    if [[ "${PRUNE_DRY_RUN}" == "1" ]]; then
+      echo "Would delete old backup: ${path}"
+    else
+      echo "Deleting old backup: ${path}"
+      rm -rf --one-file-system "${path}"
+    fi
+  done
+}
+
+if [[ "${LIST_ONLY}" == "1" ]]; then
+  list_backups
+  exit 0
+fi
+
+if [[ "${PRUNE_ONLY}" == "1" ]]; then
+  prune_backups
+  exit 0
 fi
 
 if ! command -v pct >/dev/null 2>&1; then
@@ -228,5 +378,7 @@ echo "Validating post-backup service state."
 pct exec "${CTID}" -- systemctl is-active redis-server.service watchstate-web.service watchstate-scheduler.service
 pct exec "${CTID}" -- curl -fsS http://127.0.0.1:8080/v1/api/system/healthcheck
 echo
+
+prune_backups
 
 echo "Backup complete: ${BACKUP_DIR}"
