@@ -25,7 +25,7 @@ From upstream analysis:
 
 ## First Install Group
 
-The first package group should cover operating system utilities and non-PHP runtime tools:
+The first package group covers operating system utilities and non-PHP runtime tools:
 
 - git
 - curl
@@ -45,6 +45,29 @@ The first package group should cover operating system utilities and non-PHP runt
 - iproute2
 - tzdata
 
+## Validation Result
+
+Validated successfully on the Debian 13 LXC baseline.
+
+Observed versions:
+
+| Tool | Version |
+| --- | --- |
+| SQLite | 3.46.1 |
+| Redis | 8.0.2 |
+| FFmpeg | 7.1.5-0+deb13u1 |
+| FFprobe | 7.1.5-0+deb13u1 |
+| Git | 2.47.3 |
+| curl | 8.14.1-2+deb13u3 |
+
+Redis service status:
+
+- `redis-server.service` enabled
+- `redis-server.service` active and running
+- Listening on `127.0.0.1:6379`
+
+Fontconfig validation succeeded with fonts visible through `fc-list`.
+
 ## Deferred Items
 
 Do not install these until the next validation step:
@@ -55,21 +78,10 @@ Do not install these until the next validation step:
 - WatchState source
 - systemd service files
 
-## Validation
-
-After installing the first package group, validate:
-
-```bash
-sqlite3 --version
-redis-server --version
-ffmpeg -version
-ffprobe -version
-git --version
-curl --version
-fc-list | head
-systemctl status redis-server --no-pager
-```
-
 ## Snapshot Point
 
-After this phase validates cleanly, create a Proxmox snapshot before installing WatchState source or modifying service configuration.
+After the full prerequisite phase validates cleanly, create a Proxmox snapshot before installing WatchState source or modifying service configuration.
+
+## Next Step
+
+Validate the PHP runtime path. WatchState requires PHP 8.4 and specific extensions. The next decision is whether to use standalone FrankenPHP as the PHP runtime, matching upstream, or Debian PHP packages plus a traditional web server.
