@@ -6,6 +6,8 @@ This project documents and automates a native WatchState installation for Proxmo
 
 This repository is public. Do not commit secrets or private deployment data. Use placeholders for tokens, passwords, internal URLs, private keys, certificates, real application config, database files, and logs that may contain sensitive values.
 
+Never print, copy, or commit the live contents of `/config/config/.env`, `/config/config/servers.yaml` after real servers are added, `/config/db/watchstate_v02.db`, certificates, private keys, API keys, logs, or private hostnames/URLs.
+
 ## Phase 0 - Project Foundation
 
 - [x] Create GitHub repository.
@@ -44,25 +46,31 @@ This repository is public. Do not commit secrets or private deployment data. Use
 
 ## Phase 4 - Application Installation
 
-- [ ] Clone WatchState source.
-- [ ] Build application assets.
-- [ ] Configure environment.
-- [ ] Initialize storage.
-- [ ] Start application manually.
+- [x] Clone WatchState source.
+- [x] Build application assets.
+- [x] Configure environment.
+- [x] Initialize storage.
+- [x] Start application manually.
 
 ## Phase 5 - Native Service Management
 
-- [ ] Create systemd unit.
-- [ ] Configure service user and permissions.
-- [ ] Enable service startup.
-- [ ] Validate restart behavior.
+- [x] Install and validate FrankenPHP.
+- [x] Create `watchstate-web.service`.
+- [x] Create `watchstate-scheduler.service`.
+- [x] Configure service user and permissions.
+- [x] Enable service startup.
+- [x] Validate restart behavior.
+- [x] Reboot-validate native services.
+- [x] Validate healthcheck through systemd-managed FrankenPHP service.
 
 ## Phase 6 - Application Configuration
 
+- [ ] Confirm latest Proxmox snapshot after service validation.
 - [ ] Complete first web login.
 - [ ] Configure WatchState from UI.
 - [ ] Enable scheduled tasks from UI.
 - [ ] Confirm no manual cron is required.
+- [ ] Decide whether Debian `redis-server` remains the supported native Redis model.
 
 ## Phase 7 - Media Integration
 
@@ -81,6 +89,34 @@ This repository is public. Do not commit secrets or private deployment data. Use
 - [ ] Produce update script.
 - [ ] Produce verification script.
 
+## Current State
+
+WatchState is installed natively in Debian LXC CT 103 with persistent runtime data under `/config`. Composer dependencies are installed, frontend assets are built and copied to `/opt/app/public/exported`, the application has been initialized, the SQLite database has been created and migrated, Debian Redis responds to `PONG`, FrankenPHP is installed at `/opt/bin/frankenphp`, and both native WatchState services are enabled, running, and reboot-validated.
+
+Current validated services:
+
+- `watchstate-web.service`
+- `watchstate-scheduler.service`
+- `redis-server.service`
+
+Validated healthcheck:
+
+```text
+http://127.0.0.1:8080/v1/api/system/healthcheck
+```
+
+Known safe snapshot checkpoint before service creation:
+
+```text
+watchstate-phase-5-frankenphp-validated
+```
+
+Recommended current snapshot checkpoint after service validation:
+
+```text
+watchstate-phase-5-services-validated
+```
+
 ## Current Next Step
 
-Begin Phase 4 by cloning the WatchState source tree, installing dependencies as the `watchstate` service user where practical, and validating the application console before creating systemd services.
+Confirm whether the `watchstate-phase-5-services-validated` Proxmox snapshot exists. If it does not, take it before moving into Phase 6 application configuration, reverse proxy/TLS planning, media bind mounts, backup/restore, or update procedure work.
