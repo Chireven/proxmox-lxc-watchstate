@@ -2,6 +2,10 @@
 
 This project documents and automates a native WatchState installation for Proxmox LXC.
 
+## Public Repository Safety
+
+This repository is public. Do not commit secrets or private deployment data. Use placeholders for tokens, passwords, internal URLs, private keys, certificates, real application config, database files, and logs that may contain sensitive values.
+
 ## Phase 0 - Project Foundation
 
 - [x] Create GitHub repository.
@@ -22,10 +26,10 @@ This project documents and automates a native WatchState installation for Proxmo
 
 ## Phase 2 - LXC Baseline
 
-- [ ] Create fresh Debian LXC.
-- [ ] Confirm container settings.
-- [ ] Update operating system.
-- [ ] Snapshot clean baseline.
+- [x] Create fresh Debian LXC.
+- [x] Confirm container settings.
+- [x] Update operating system.
+- [x] Snapshot clean baseline.
 
 ## Phase 3 - Native Prerequisites
 
@@ -76,4 +80,4 @@ This project documents and automates a native WatchState installation for Proxmo
 
 ## Current Next Step
 
-Begin Phase 2 by creating a fresh Debian 13 LXC baseline with no media bind mounts and no WatchState packages installed yet.
+Begin Phase 3 by installing and validating the native prerequisite packages for WatchState.
