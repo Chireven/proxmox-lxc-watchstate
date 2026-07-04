@@ -89,10 +89,11 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Validate update procedure.
 - [x] Produce verification script.
 - [x] Validate verification script.
+- [x] Produce update script.
+- [ ] Validate update script.
 - [ ] Write uninstall/rollback notes.
 - [ ] Write troubleshooting guide.
 - [ ] Produce install script.
-- [ ] Produce update script.
 
 ## Current State
 
@@ -107,6 +108,8 @@ Backup and restore operations are validated. The host-side backup script creates
 The native update procedure is validated. Required corrections discovered during testing are documented: `rsync` must be installed, frontend output must be synced from `/opt/app/frontend/exported` to `/opt/app/public/exported`, and database migrations must use `db:migrate --execute --no-interaction`.
 
 The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, and frontend output.
+
+The update script is produced from the validated Phase 9 procedure. It still needs a live validation run before being marked complete.
 
 Current validated services:
 
@@ -146,4 +149,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Choose the next workstream: update script, uninstall/rollback notes, troubleshooting guide, reverse proxy/TLS, install script, or final install documentation.
+Validate `scripts/update-watchstate.sh` during a maintenance window, then choose the next workstream: uninstall/rollback notes, troubleshooting guide, reverse proxy/TLS, install script, or final install documentation.
