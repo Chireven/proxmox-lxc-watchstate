@@ -65,7 +65,7 @@ Never print, copy, or commit the live contents of `/config/config/.env`, `/confi
 
 ## Phase 6 - Application Configuration
 
-- [ ] Confirm latest Proxmox snapshot after service validation.
+- [x] Confirm latest Proxmox snapshot after service validation.
 - [ ] Complete first web login.
 - [ ] Configure WatchState from UI.
 - [ ] Enable scheduled tasks from UI.
@@ -111,7 +111,7 @@ Known safe snapshot checkpoint before service creation:
 watchstate-phase-5-frankenphp-validated
 ```
 
-Recommended current snapshot checkpoint after service validation:
+Confirmed snapshot checkpoint after service validation:
 
 ```text
 watchstate-phase-5-services-validated
@@ -119,4 +119,4 @@ watchstate-phase-5-services-validated
 
 ## Current Next Step
 
-Confirm whether the `watchstate-phase-5-services-validated` Proxmox snapshot exists. If it does not, take it before moving into Phase 6 application configuration, reverse proxy/TLS planning, media bind mounts, backup/restore, or update procedure work.
+Begin Phase 6 by completing the first WatchState web login and configuring the application from the UI. Confirm scheduled tasks are enabled inside WatchState and that no manually managed cron jobs are required.
