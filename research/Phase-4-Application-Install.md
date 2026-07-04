@@ -49,11 +49,39 @@ Do not commit or document real values for:
 
 Use placeholders when documentation needs examples.
 
+## Source Checkout Result
+
+WatchState source was cloned into `/opt/app`.
+
+Validated checkout:
+
+```text
+branch: master
+commit: 9a4c8225e3d9502ae759b74fe301ae5d52df7c54
+```
+
+Working tree validation:
+
+- `git status --short` returned no output when run as `watchstate`.
+- This indicates a clean checkout.
+
+Important source files validated:
+
+- `/opt/app/composer.json`
+- `/opt/app/frontend/package.json`
+- `/opt/app/bin/console`
+
+Operational note:
+
+- The repository is owned by `watchstate:watchstate`.
+- Git checks should normally be run as the `watchstate` user using `runuser -u watchstate -- git -C /opt/app ...`.
+- Running Git against `/opt/app` as root triggers Git's dubious ownership protection, which is expected and should not be bypassed unless needed for a specific administrative reason.
+
 ## Planned Steps
 
-1. Clone upstream source into `/opt/app`.
-2. Record upstream commit hash.
-3. Confirm source files expected from upstream analysis exist.
+1. Clone upstream source into `/opt/app`. Done.
+2. Record upstream commit hash. Done.
+3. Confirm source files expected from upstream analysis exist. Done.
 4. Create helper symlink `/opt/bin/console` to `/opt/app/bin/console`.
 5. Run Composer dependency install as `watchstate` if possible.
 6. Run frontend dependency install/build with Bun.
