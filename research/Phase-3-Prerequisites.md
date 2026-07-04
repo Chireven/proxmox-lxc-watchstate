@@ -175,6 +175,35 @@ N: Unable to locate package bun
 
 Decision: install Bun from upstream for build-time frontend asset generation, then validate it before using it with WatchState.
 
+## Bun Install Group
+
+Installed Bun using the upstream installer with `BUN_INSTALL=/opt/bun`.
+
+Post-install path handling:
+
+- Bun binary installed at `/opt/bun/bin/bun`.
+- System symlink created at `/usr/bin/bun`.
+- On Debian usrmerge systems, `which bun` may report `/bin/bun` even when the symlink was created through `/usr/bin/bun`.
+- `/etc/profile.d/bun.sh` added to expose `/opt/bun/bin` in future login shells.
+
+## Bun Validation Result
+
+Validated successfully.
+
+Observed version:
+
+```text
+Bun 1.3.14
+```
+
+Observed path:
+
+```text
+/bin/bun
+```
+
+`bun --help` returned normal command help.
+
 ## Deferred Items
 
 Do not install these until the next validation step:
@@ -189,4 +218,4 @@ After the full prerequisite phase validates cleanly, create a Proxmox snapshot b
 
 ## Next Step
 
-Install and validate Bun for frontend asset generation using the upstream Bun installer.
+Phase 3 prerequisite tooling is validated. The next step is to create a dedicated WatchState service user and directory layout, then snapshot before installing WatchState source.
