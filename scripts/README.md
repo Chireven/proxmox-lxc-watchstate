@@ -13,10 +13,12 @@ chmod +x scripts/backup-watchstate.sh
 ./scripts/backup-watchstate.sh
 ```
 
+If no CT ID is supplied, the script looks for a Proxmox CT named `watchstate`.
+
 Default settings:
 
 ```text
-CT ID: 103
+CT name: watchstate
 backup root: /root/watchstate-backups
 include app tree: yes
 ```
@@ -24,6 +26,7 @@ include app tree: yes
 Common options:
 
 ```bash
+./scripts/backup-watchstate.sh --name watchstate
 ./scripts/backup-watchstate.sh --ctid 103 --backup-root /mnt/backups/watchstate
 ./scripts/backup-watchstate.sh --no-app
 ./scripts/backup-watchstate.sh --keep-tmp
