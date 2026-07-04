@@ -132,12 +132,41 @@ PHP-FPM service status:
 - `php8.4-fpm.service` active and running
 - Ready to handle connections
 
+## Composer Install Group
+
+Installed Debian Composer package.
+
+## Composer Validation Result
+
+Validated successfully.
+
+Observed Composer version:
+
+```text
+Composer 2.8.8
+PHP 8.4.23 at /usr/bin/php8.4
+```
+
+`composer diagnose` results:
+
+- Platform settings: OK
+- Git settings: OK
+- Packagist HTTP connectivity: OK
+- Packagist HTTPS connectivity: OK
+- GitHub rate limit check: OK
+- Disk free space: OK
+- zip extension present
+- unzip present
+
+Note: Debian Composer reports a warning that Composer's own `installed.json` is unavailable. This appears to be a Debian packaging detail and does not block using Composer.
+
+Operational note: Composer validation was run as root with `COMPOSER_ALLOW_SUPERUSER=1`. Future application dependency installs should run as the dedicated WatchState service user where practical.
+
 ## Deferred Items
 
 Do not install these until the next validation step:
 
 - FrankenPHP
-- Composer
 - Bun
 - WatchState source
 - systemd service files
@@ -148,4 +177,4 @@ After the full prerequisite phase validates cleanly, create a Proxmox snapshot b
 
 ## Next Step
 
-Install and validate Composer, then use Composer platform checks later to confirm the WatchState dependency requirements are satisfied by Debian PHP.
+Install and validate Bun for frontend asset generation.
