@@ -10,6 +10,26 @@ This document describes the first-pass native LXC runtime model for WatchState.
 - No Docker runtime
 - No media bind mounts until the web application is healthy
 
+## Service User
+
+Use a dedicated `watchstate` service account with UID/GID `1000:1000`.
+
+Rationale:
+
+- The upstream Docker image runs the application as a non-root user with UID `1000`.
+- Matching upstream reduces translation drift between the Docker image and the native LXC install.
+- WatchState is expected to use network APIs rather than host media bind mounts, so host UID/GID alignment is not required for the initial design.
+- If host bind mounts are added later, UID/GID mapping must be reviewed before exposing those paths.
+
+Target identity:
+
+```text
+user:  watchstate
+uid:   1000
+group: watchstate
+gid:   1000
+```
+
 ## Directory Layout
 
 Initial layout should stay close to the upstream container:
@@ -33,6 +53,8 @@ Expected persistent subdirectories:
 /config/webhooks
 /config/profiler
 ```
+
+These paths should be owned by the dedicated `watchstate` service account unless a later step proves a different ownership model is required.
 
 ## Process Model
 
@@ -98,6 +120,7 @@ The native installation must reproduce the important initialization behavior fro
 | Topic | Decision | Reason |
 | --- | --- | --- |
 | Base OS | Debian 13 | Matches upstream image. |
+| Service user | `watchstate` `1000:1000` | Matches upstream non-root UID assumption. |
 | Runtime | FrankenPHP first | Matches upstream behavior. |
 | Data path | `/config` | Matches upstream docs and volume path. |
 | Application path | `/opt/app` | Matches upstream image. |
