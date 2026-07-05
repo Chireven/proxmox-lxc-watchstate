@@ -11,6 +11,7 @@ Options:
   --ctid <id>      Proxmox CT ID. Overrides name discovery.
   --name <name>    Proxmox CT name to discover. Default: watchstate
   --json           Emit a compact JSON-like summary at the end
+  --no-color       Disable colored output
   -h, --help       Show this help
 
 Examples:
@@ -23,8 +24,10 @@ USAGE
 CTID=""
 CT_NAME="watchstate"
 EMIT_JSON="0"
+NO_COLOR_OUTPUT="0"
 FAILURES=0
 WARNINGS=0
+PASSES=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,6 +41,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --json)
       EMIT_JSON="1"
+      shift
+      ;;
+    --no-color)
+      NO_COLOR_OUTPUT="1"
       shift
       ;;
     -h|--help)
@@ -57,23 +64,60 @@ if [[ -z "${CT_NAME}" && -z "${CTID}" ]]; then
   exit 2
 fi
 
+if [[ -t 1 && "${NO_COLOR_OUTPUT}" != "1" && -z "${NO_COLOR:-}" ]]; then
+  BOLD=$'\033[1m'
+  DIM=$'\033[2m'
+  RED=$'\033[31m'
+  GREEN=$'\033[32m'
+  YELLOW=$'\033[33m'
+  BLUE=$'\033[34m'
+  CYAN=$'\033[36m'
+  RESET=$'\033[0m'
+else
+  BOLD=""
+  DIM=""
+  RED=""
+  GREEN=""
+  YELLOW=""
+  BLUE=""
+  CYAN=""
+  RESET=""
+fi
+
+hr() {
+  printf '%s\n' "${DIM}────────────────────────────────────────────────────────────${RESET}"
+}
+
+banner() {
+  echo
+  hr
+  printf '%b\n' "${BOLD}${CYAN}WatchState LXC Verification${RESET}"
+  printf '%b\n' "${DIM}Target: CT ${CTID:-${CT_NAME}}${RESET}"
+  hr
+}
+
 pass() {
-  echo "PASS: $*"
+  PASSES=$((PASSES + 1))
+  printf '%b\n' "${GREEN}PASS${RESET}  $*"
 }
 
 warn() {
   WARNINGS=$((WARNINGS + 1))
-  echo "WARN: $*"
+  printf '%b\n' "${YELLOW}WARN${RESET}  $*"
 }
 
 fail() {
   FAILURES=$((FAILURES + 1))
-  echo "FAIL: $*"
+  printf '%b\n' "${RED}FAIL${RESET}  $*"
+}
+
+info() {
+  printf '%b\n' "${DIM}INFO${RESET}  $*"
 }
 
 section() {
   echo
-  echo "== $* =="
+  printf '%b\n' "${BOLD}${BLUE}== $* ==${RESET}"
 }
 
 resolve_ctid() {
@@ -97,7 +141,7 @@ resolve_ctid() {
   fi
 
   CTID="${matches}"
-  echo "Discovered CT '${CT_NAME}' as CTID ${CTID}."
+  info "Discovered CT '${CT_NAME}' as CTID ${CTID}."
 }
 
 run_ct() {
@@ -221,7 +265,7 @@ check_runtime() {
   health="$(run_ct curl -fsS http://127.0.0.1:8080/v1/api/system/healthcheck 2>/dev/null || true)"
   if [[ "${health}" == *'"status":"ok"'* ]]; then
     pass "WatchState healthcheck is healthy"
-    echo "${health}"
+    info "${health}"
   else
     fail "WatchState healthcheck failed or was unexpected: ${health:-empty response}"
   fi
@@ -242,9 +286,9 @@ check_app_state() {
   remote="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git remote get-url origin' 2>/dev/null || true)"
   status="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git status --short' 2>/dev/null || true)"
 
-  echo "branch: ${branch:-unknown}"
-  echo "commit: ${commit:-unknown}"
-  echo "origin: ${remote:-unknown}"
+  info "branch: ${branch:-unknown}"
+  info "commit: ${commit:-unknown}"
+  info "origin: ${remote:-unknown}"
 
   if [[ "${branch}" == "master" ]]; then
     pass "Git branch is master"
@@ -334,30 +378,37 @@ check_database() {
   fi
 }
 
+print_summary() {
+  section "Summary"
+  hr
+  printf '%b\n' "${GREEN}Passes:${RESET}   ${PASSES}"
+  printf '%b\n' "${YELLOW}Warnings:${RESET} ${WARNINGS}"
+  printf '%b\n' "${RED}Failures:${RESET} ${FAILURES}"
+  hr
+
+  if [[ "${EMIT_JSON}" == "1" ]]; then
+    printf '{"ctid":"%s","name":"%s","passes":%s,"warnings":%s,"failures":%s}\n' "${CTID}" "${CT_NAME}" "${PASSES}" "${WARNINGS}" "${FAILURES}"
+  fi
+}
+
 check_host
+banner
 check_identity_and_paths
 check_services
 check_runtime
 check_app_state
 check_tools
 check_database
-
-section "Summary"
-echo "Warnings: ${WARNINGS}"
-echo "Failures: ${FAILURES}"
-
-if [[ "${EMIT_JSON}" == "1" ]]; then
-  printf '{"ctid":"%s","name":"%s","warnings":%s,"failures":%s}\n' "${CTID}" "${CT_NAME}" "${WARNINGS}" "${FAILURES}"
-fi
+print_summary
 
 if [[ "${FAILURES}" -gt 0 ]]; then
-  echo "Verification failed. Review FAIL entries above." >&2
+  printf '%b\n' "${RED}${BOLD}Verification failed. Review FAIL entries above.${RESET}" >&2
   exit 1
 fi
 
 if [[ "${WARNINGS}" -gt 0 ]]; then
-  echo "Verification completed with warnings. Review WARN entries above."
+  printf '%b\n' "${YELLOW}${BOLD}Verification completed with warnings. Review WARN entries above.${RESET}"
   exit 0
 fi
 
-echo "Verification passed."
+printf '%b\n' "${GREEN}${BOLD}Verification passed.${RESET}"
