@@ -8,16 +8,20 @@ Usage: verify-watchstate.sh [options]
 Verify the native WatchState LXC deployment from the Proxmox host.
 
 Options:
-  --ctid <id>      Proxmox CT ID. Overrides name discovery.
-  --name <name>    Proxmox CT name to discover. Default: watchstate
-  --json           Emit a compact JSON-like summary at the end
-  --no-color       Disable colored output
-  -h, --help       Show this help
+  --ctid <id>            Proxmox CT ID. Overrides name discovery.
+  --name <name>          Proxmox CT name to discover. Default: watchstate
+  --json                 Emit a compact JSON-like summary at the end
+  --support-bundle       Include sanitized backend diagnostics for public support
+  --backend-diagnostics  Alias for --support-bundle
+  --no-sanitize          Do not sanitize support-bundle backend names, URLs, or users
+  --no-color             Disable colored output
+  -h, --help             Show this help
 
 Examples:
   ./scripts/verify-watchstate.sh
   ./scripts/verify-watchstate.sh --name watchstate
   ./scripts/verify-watchstate.sh --ctid 103
+  ./scripts/verify-watchstate.sh --ctid 103 --support-bundle
 USAGE
 }
 
@@ -25,6 +29,8 @@ CTID=""
 CT_NAME="watchstate"
 EMIT_JSON="0"
 NO_COLOR_OUTPUT="0"
+SUPPORT_BUNDLE="0"
+SANITIZE_SUPPORT="1"
 FAILURES=0
 WARNINGS=0
 PASSES=0
@@ -41,6 +47,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --json)
       EMIT_JSON="1"
+      shift
+      ;;
+    --support-bundle|--backend-diagnostics)
+      SUPPORT_BUNDLE="1"
+      shift
+      ;;
+    --no-sanitize)
+      SANITIZE_SUPPORT="0"
       shift
       ;;
     --no-color)
@@ -378,6 +392,207 @@ check_database() {
   fi
 }
 
+write_support_bundle_helper() {
+  run_ct_sh "cat > /tmp/watchstate-support-bundle.php" <<'PHP'
+<?php
+declare(strict_types=1);
+
+$sanitize = getenv('WS_VERIFY_SANITIZE') !== '0';
+$serversFile = '/config/config/servers.yaml';
+$autoload = '/opt/app/vendor/autoload.php';
+
+function out(string $line = ''): void { echo $line . PHP_EOL; }
+function yesno(mixed $value): string { return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'enabled' : 'disabled'; }
+function stamp(mixed $value): string {
+    if (null === $value || '' === $value || false === $value) { return 'never'; }
+    if (is_numeric($value)) { return date('c', (int) $value); }
+    return (string) $value;
+}
+function getv(array $array, string $path, mixed $default = null): mixed {
+    $current = $array;
+    foreach (explode('.', $path) as $part) {
+        if (!is_array($current) || !array_key_exists($part, $current)) { return $default; }
+        $current = $current[$part];
+    }
+    return $current;
+}
+
+$maps = [];
+function placeholder(string $kind, mixed $value): string {
+    global $sanitize, $maps;
+    $value = trim((string) $value);
+    if ('' === $value) { return '<empty>'; }
+    if (!$sanitize) { return $value; }
+    if (!isset($maps[$kind])) { $maps[$kind] = []; }
+    if (!isset($maps[$kind][$value])) { $maps[$kind][$value] = '<' . $kind . '-' . (count($maps[$kind]) + 1) . '>'; }
+    return $maps[$kind][$value];
+}
+function backend_label(string $type, mixed $name): string {
+    $type = preg_replace('/[^a-z0-9]+/', '-', strtolower('' === (string) $type ? 'backend' : (string) $type));
+    return placeholder($type . '-backend', $name);
+}
+function identity_label(mixed $user): string { return placeholder('identity', $user); }
+function token_state(mixed $token): string { return '' === trim((string) $token) ? 'missing' : 'present'; }
+function safe_url(mixed $url, string $label): string {
+    global $sanitize;
+    $url = trim((string) $url);
+    if ('' === $url) { return '<empty>'; }
+    if (!$sanitize) { return $url; }
+    $parts = parse_url($url);
+    if (!is_array($parts) || empty($parts['scheme'])) { return '<url-for-' . trim($label, '<>') . '>'; }
+    $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+    return $parts['scheme'] . '://<url-for-' . trim($label, '<>') . '>' . $port;
+}
+function normalize_servers(mixed $servers): array {
+    if (!is_array($servers)) { return []; }
+    $normalized = [];
+    foreach ($servers as $key => $value) {
+        if (!is_array($value)) { continue; }
+        if (!array_key_exists('name', $value) && is_string($key)) { $value['name'] = $key; }
+        $normalized[] = $value;
+    }
+    return $normalized;
+}
+function probe_backend(mixed $url, mixed $type): string {
+    $url = trim((string) $url);
+    $type = strtolower((string) $type);
+    if ('' === $url) { return 'skipped-empty-url'; }
+    $target = rtrim($url, '/');
+    if ('plex' === $type) { $target .= '/identity'; }
+    $context = stream_context_create(['http' => ['timeout' => 4, 'ignore_errors' => true], 'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
+    $result = @file_get_contents($target, false, $context);
+    if (false === $result) { return 'failed'; }
+    return 'ok';
+}
+
+out('Support bundle mode: ' . ($sanitize ? 'sanitized' : 'unsanitized'));
+out('Source: /config/config/servers.yaml');
+
+if (!file_exists($serversFile)) {
+    out('Backend Summary');
+    out('- servers.yaml not found; no configured backends discovered from config file');
+    exit(0);
+}
+
+if (!file_exists($autoload)) {
+    out('Backend Summary');
+    out('- vendor autoload not found; cannot parse servers.yaml');
+    exit(0);
+}
+
+require $autoload;
+
+try {
+    $servers = Symfony\Component\Yaml\Yaml::parseFile($serversFile);
+} catch (Throwable $e) {
+    out('Backend Summary');
+    out('- failed to parse servers.yaml: ' . $e->getMessage());
+    exit(0);
+}
+
+$backends = normalize_servers($servers);
+if (0 === count($backends)) {
+    out('Backend Summary');
+    out('- no configured backends found in servers.yaml');
+    exit(0);
+}
+
+$summary = [];
+out('Backend Summary');
+foreach ($backends as $backend) {
+    $name = (string) getv($backend, 'name', 'unknown');
+    $type = (string) getv($backend, 'type', 'unknown');
+    $label = backend_label($type, $name);
+    $user = identity_label(getv($backend, 'user', 'unknown'));
+    $url = safe_url(getv($backend, 'url', ''), $label);
+    $importEnabled = filter_var(getv($backend, 'import.enabled', false), FILTER_VALIDATE_BOOLEAN);
+    $exportEnabled = filter_var(getv($backend, 'export.enabled', false), FILTER_VALIDATE_BOOLEAN);
+    $reachability = probe_backend(getv($backend, 'url', ''), $type);
+
+    $summary[] = [
+        'label' => $label,
+        'type' => $type,
+        'user' => $user,
+        'import' => $importEnabled,
+        'export' => $exportEnabled,
+    ];
+
+    out(sprintf(
+        '- %s type=%s url=%s user=%s token=%s import=%s export=%s last_import=%s last_export=%s reachability=%s',
+        $label,
+        $type,
+        $url,
+        $user,
+        token_state(getv($backend, 'token', '')),
+        $importEnabled ? 'enabled' : 'disabled',
+        $exportEnabled ? 'enabled' : 'disabled',
+        stamp(getv($backend, 'import.lastSync')),
+        stamp(getv($backend, 'export.lastSync')),
+        $reachability
+    ));
+}
+
+out('');
+out('Possible Sync Topology');
+$edges = 0;
+foreach ($summary as $source) {
+    if (true !== $source['import']) { continue; }
+    foreach ($summary as $target) {
+        if ($source['label'] === $target['label']) { continue; }
+        if (true !== $target['export']) { continue; }
+        if ($source['user'] !== $target['user']) { continue; }
+        out(sprintf('- %s/%s -> %s/%s', $source['label'], $source['user'], $target['label'], $target['user']));
+        $edges++;
+    }
+}
+if (0 === $edges) {
+    out('- no same-identity import-to-export paths inferred from configured backends');
+}
+
+out('');
+out('Sanitization Map');
+if ($sanitize) {
+    foreach ($maps as $kind => $items) {
+        out('- ' . $kind . ': ' . count($items) . ' value(s) redacted');
+    }
+} else {
+    out('- disabled by --no-sanitize');
+}
+PHP
+}
+
+check_support_bundle() {
+  if [[ "${SUPPORT_BUNDLE}" != "1" ]]; then
+    return
+  fi
+
+  section "Backend support bundle"
+
+  if [[ "${SANITIZE_SUPPORT}" == "1" ]]; then
+    info "Sanitization is enabled. Output is intended to be safe for public support review, but review before posting."
+  else
+    warn "Sanitization is disabled. Output may include private backend names, URLs, and users."
+  fi
+
+  if ! run_ct test -f /config/config/servers.yaml; then
+    warn "/config/config/servers.yaml was not found; no backend topology can be reported"
+    return
+  fi
+
+  if ! run_ct test -f /opt/app/vendor/autoload.php; then
+    warn "/opt/app/vendor/autoload.php was not found; cannot parse backend configuration"
+    return
+  fi
+
+  write_support_bundle_helper
+  if run_ct_sh "WS_VERIFY_SANITIZE=${SANITIZE_SUPPORT} /opt/bin/frankenphp php-cli /tmp/watchstate-support-bundle.php"; then
+    pass "Backend support bundle generated"
+  else
+    warn "Backend support bundle generation failed"
+  fi
+  run_ct rm -f /tmp/watchstate-support-bundle.php >/dev/null 2>&1 || true
+}
+
 print_summary() {
   section "Summary"
   hr
@@ -387,7 +602,7 @@ print_summary() {
   hr
 
   if [[ "${EMIT_JSON}" == "1" ]]; then
-    printf '{"ctid":"%s","name":"%s","passes":%s,"warnings":%s,"failures":%s}\n' "${CTID}" "${CT_NAME}" "${PASSES}" "${WARNINGS}" "${FAILURES}"
+    printf '{"ctid":"%s","name":"%s","passes":%s,"warnings":%s,"failures":%s,"support_bundle":%s,"sanitized":%s}\n' "${CTID}" "${CT_NAME}" "${PASSES}" "${WARNINGS}" "${FAILURES}" "${SUPPORT_BUNDLE}" "${SANITIZE_SUPPORT}"
   fi
 }
 
@@ -399,6 +614,7 @@ check_runtime
 check_app_state
 check_tools
 check_database
+check_support_bundle
 print_summary
 
 if [[ "${FAILURES}" -gt 0 ]]; then
