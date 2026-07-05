@@ -110,24 +110,28 @@ Installs the native WatchState deployment into an existing Debian LXC from the P
 
 This script does not create the LXC. Start with a clean Debian CT, then run the script from the Proxmox host.
 
-The install script requires either an existing executable `/opt/bin/frankenphp` in the CT or an explicit `--frankenphp-url` argument. This avoids silently installing an unvalidated runtime binary.
+By default, the install script uses the official FrankenPHP install script and then places the resulting binary at `/opt/bin/frankenphp` for this deployment.
 
 Example:
 
 ```bash
 chmod +x scripts/install-watchstate.sh
-./scripts/install-watchstate.sh --ctid 103 --frankenphp-url '<validated-frankenphp-binary-url>'
+./scripts/install-watchstate.sh --ctid 103
 ```
 
 Common options:
 
 ```bash
-./scripts/install-watchstate.sh --name watchstate --frankenphp-url '<validated-frankenphp-binary-url>'
-./scripts/install-watchstate.sh --ctid 103 --frankenphp-url '<validated-frankenphp-binary-url>'
+./scripts/install-watchstate.sh --name watchstate
+./scripts/install-watchstate.sh --ctid 103
 ./scripts/install-watchstate.sh --branch master
+./scripts/install-watchstate.sh --frankenphp-install-script https://frankenphp.dev/install.sh
+./scripts/install-watchstate.sh --frankenphp-url '<validated-frankenphp-binary-url>'
 ./scripts/install-watchstate.sh --skip-verify
 ./scripts/install-watchstate.sh --force
 ```
+
+Use `--frankenphp-url` only when pinning a specific validated FrankenPHP binary. Otherwise, the default official install script path is simpler.
 
 Default behavior:
 
