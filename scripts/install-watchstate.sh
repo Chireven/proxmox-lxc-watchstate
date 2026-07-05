@@ -14,8 +14,7 @@ Options:
   --name <name>                     Proxmox CT name to discover. Default: watchstate
   --branch <branch>                 WatchState upstream branch. Default: master
   --repo <url>                      WatchState upstream repository. Default: https://github.com/arabcoders/watchstate.git
-  --frankenphp-url <url>            Download a specific FrankenPHP binary URL instead of using the install script
-  --frankenphp-install-script <url> FrankenPHP installer URL. Default: https://frankenphp.dev/install.sh
+  --frankenphp-url <url>            Download a specific FrankenPHP binary URL. Default: latest static binary for CT architecture
   --uid <uid>                       watchstate service UID. Default: 1000
   --gid <gid>                       watchstate service GID. Default: 1000
   --skip-verify                    Do not run verify-watchstate.sh after install
@@ -25,7 +24,7 @@ Options:
 Examples:
   ./scripts/install-watchstate.sh --ctid 103
   ./scripts/install-watchstate.sh --name watchstate
-  ./scripts/install-watchstate.sh --ctid 103 --frankenphp-url https://example.invalid/frankenphp-linux-x86_64
+  ./scripts/install-watchstate.sh --ctid 103 --frankenphp-url https://github.com/php/frankenphp/releases/latest/download/frankenphp-linux-x86_64
 USAGE
 }
 
@@ -34,7 +33,6 @@ CT_NAME="watchstate"
 BRANCH="master"
 REPO_URL="https://github.com/arabcoders/watchstate.git"
 FRANKENPHP_URL=""
-FRANKENPHP_INSTALL_SCRIPT="https://frankenphp.dev/install.sh"
 WS_UID="1000"
 WS_GID="1000"
 SKIP_VERIFY="0"
@@ -66,8 +64,8 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --frankenphp-install-script)
-      FRANKENPHP_INSTALL_SCRIPT="${2:-}"
-      shift 2
+      echo "ERROR: --frankenphp-install-script has been removed. Use --frankenphp-url to pin a direct binary URL." >&2
+      exit 2
       ;;
     --uid)
       WS_UID="${2:-}"
@@ -110,8 +108,8 @@ for value_name in WS_UID WS_GID; do
   fi
 done
 
-if [[ -z "${BRANCH}" || -z "${REPO_URL}" || -z "${FRANKENPHP_INSTALL_SCRIPT}" ]]; then
-  echo "ERROR: --branch, --repo, and --frankenphp-install-script cannot be empty." >&2
+if [[ -z "${BRANCH}" || -z "${REPO_URL}" ]]; then
+  echo "ERROR: --branch and --repo cannot be empty." >&2
   exit 2
 fi
 
@@ -315,19 +313,19 @@ else
   useradd -u '${WS_UID}' -g '${WS_GID}' -d /config -s /usr/sbin/nologin watchstate
 fi
 
-mkdir -p /opt/bin /config
-chown -R watchstate:watchstate /config
+mkdir -p /opt/bin /opt/app /config
+chown -R watchstate:watchstate /opt/app /config
 "
 
 echo "Installing Bun if missing."
-if run_ct_sh 'command -v bun >/dev/null 2>&1'; then
+if run_ct test -x /usr/local/bin/bun; then
   echo "Bun is already installed."
 else
   run_ct_sh "
 set -e
 curl -fsSL https://bun.sh/install | bash
 install -m 0755 /root/.bun/bin/bun /usr/local/bin/bun
-bun --version
+/usr/local/bin/bun --version
 "
 fi
 
@@ -338,28 +336,20 @@ elif [[ -n "${FRANKENPHP_URL}" ]]; then
   echo "Installing FrankenPHP from explicit binary URL."
   run_ct_sh "
 set -e
-curl -fsSL '${FRANKENPHP_URL}' -o /opt/bin/frankenphp
+curl -fL '${FRANKENPHP_URL}' -o /opt/bin/frankenphp
 chmod 0755 /opt/bin/frankenphp
 /opt/bin/frankenphp --version
 "
 else
-  echo "Installing FrankenPHP using official install script: ${FRANKENPHP_INSTALL_SCRIPT}"
+  echo "Installing latest FrankenPHP static binary for CT architecture."
   run_ct_sh "
 set -e
-tmpdir=\$(mktemp -d)
-trap 'rm -rf \"\${tmpdir}\"' EXIT
-cd \"\${tmpdir}\"
-curl -fsSL '${FRANKENPHP_INSTALL_SCRIPT}' | sh
-
-if [ -x ./frankenphp ]; then
-  install -m 0755 ./frankenphp /opt/bin/frankenphp
-elif command -v frankenphp >/dev/null 2>&1; then
-  install -m 0755 \"\$(command -v frankenphp)\" /opt/bin/frankenphp
-else
-  echo 'ERROR: FrankenPHP installer completed but no frankenphp binary was found.' >&2
-  exit 1
-fi
-
+arch=\$(uname -m)
+url=\"https://github.com/php/frankenphp/releases/latest/download/frankenphp-linux-\${arch}\"
+tmp=\$(mktemp)
+trap 'rm -f \"\${tmp}\"' EXIT
+curl -fL \"\${url}\" -o \"\${tmp}\"
+install -m 0755 \"\${tmp}\" /opt/bin/frankenphp
 /opt/bin/frankenphp --version
 "
 fi
@@ -372,6 +362,7 @@ if run_ct test -d /opt/app/.git; then
   run_ct runuser -u watchstate -- sh -c "cd /opt/app && git fetch origin && git checkout '${BRANCH}' && git pull --ff-only origin '${BRANCH}'"
 else
   run_ct rm -rf /opt/app
+  run_ct install -d -o watchstate -g watchstate /opt/app
   run_ct runuser -u watchstate -- git clone --branch "${BRANCH}" "${REPO_URL}" /opt/app
 fi
 
@@ -385,7 +376,7 @@ cd /opt/app
 composer install --no-dev --prefer-dist --optimize-autoloader
 composer check-platform-reqs
 
-bun --cwd=./frontend install --frozen-lockfile
+/usr/local/bin/bun --cwd=./frontend install --frozen-lockfile
 composer frontend:gen
 
 rm -rf public/exported
