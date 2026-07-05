@@ -371,6 +371,7 @@ run_ct chown -R watchstate:watchstate /opt/app /config
 echo "Installing WatchState dependencies and generating frontend."
 run_ct runuser -u watchstate -- sh -c "
 set -e
+export PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 cd /opt/app
 
 composer install --no-dev --prefer-dist --optimize-autoloader
