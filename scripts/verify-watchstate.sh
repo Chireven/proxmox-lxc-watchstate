@@ -279,7 +279,7 @@ check_app_state() {
 check_tools() {
   section "Tool checks"
 
-  for tool in git composer bun rsync curl redis-cli; do
+  for tool in git composer rsync curl redis-cli; do
     if run_ct_sh "command -v ${tool} >/dev/null 2>&1"; then
       pass "${tool} is available"
     else
@@ -287,13 +287,20 @@ check_tools() {
     fi
   done
 
-  if run_ct_sh 'cd /opt/app && runuser -u watchstate -- composer check-platform-reqs >/dev/null 2>&1'; then
+  if run_ct test -x /usr/local/bin/bun; then
+    pass "bun is available at /usr/local/bin/bun"
+    run_ct /usr/local/bin/bun --version || true
+  else
+    fail "bun is missing at /usr/local/bin/bun"
+  fi
+
+  if run_ct_sh 'cd /opt/app && runuser -u watchstate -- sh -c "export PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin; composer check-platform-reqs >/dev/null 2>&1"'; then
     pass "Composer platform requirements pass under system PHP"
   else
     warn "Composer platform requirement check under system PHP failed"
   fi
 
-  if run_ct_sh 'cd /opt/app && runuser -u watchstate -- /opt/bin/frankenphp php-cli /bin/composer check-platform-reqs >/dev/null 2>&1'; then
+  if run_ct_sh 'cd /opt/app && runuser -u watchstate -- sh -c "export PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin; /opt/bin/frankenphp php-cli /bin/composer check-platform-reqs >/dev/null 2>&1"'; then
     pass "Composer platform requirements pass under FrankenPHP"
   else
     warn "Composer platform requirement check under FrankenPHP failed"
