@@ -112,6 +112,8 @@ This script does not create the LXC. Start with a clean Debian CT, then run the 
 
 By default, the install script uses the official FrankenPHP install script and then places the resulting binary at `/opt/bin/frankenphp` for this deployment.
 
+The install script can run from either the full repository layout or from a copied standalone scripts directory. If the `systemd/` service templates are not found next to the script or one directory above it, the script writes embedded WatchState service units into the target CT.
+
 Example:
 
 ```bash
