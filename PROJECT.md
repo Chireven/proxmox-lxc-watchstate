@@ -94,7 +94,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Write uninstall/rollback notes.
 - [x] Write troubleshooting guide.
 - [x] Produce install script.
-- [ ] Validate install script.
+- [x] Validate install script.
 
 ## Current State
 
@@ -106,17 +106,17 @@ Cron validation found no crontab for the WatchState service user and no WatchSta
 
 Backup and restore operations are validated. The host-side backup script creates archives for `/config`, native service units, FrankenPHP, and the app tree. A clean scratch CT restore was validated successfully and then removed. The backup script now supports CT name discovery, backup listing, prune-only mode, dry-run pruning, and count-based retention with a default of 14 timestamp-style backup directories.
 
-The native update procedure is validated. Required corrections discovered during testing are documented: `rsync` must be installed, frontend output must be synced from `/opt/app/frontend/exported` to `/opt/app/public/exported`, and database migrations must use `db:migrate --execute --no-interaction`.
+The native update procedure is validated. Required corrections discovered during testing are documented: `rsync` must be installed, frontend output must be synced from `/opt/app/frontend/exported` to `/opt/app/public/exported`, database migrations must use `db:migrate --execute --no-interaction`, and update-time frontend generation must use `/usr/local/bin/bun` or export a PATH that includes `/usr/local/bin`.
 
-The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, and frontend output.
+The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, and frontend output. Verification output is color-coded for easier review and includes a compact final pass/warning/failure summary.
 
-The update script is produced and validated. It successfully performed CT name discovery, pre-update backup, retention check, Proxmox snapshot creation, source/dependency/frontend update steps, migration check, service restart, healthcheck validation, and post-update verification with 0 warnings and 0 failures.
+The update script is produced and validated. It successfully performed CT name discovery, pre-update backup, retention check, Proxmox snapshot creation, source/dependency/frontend update steps, migration check, service restart, healthcheck validation, and post-update verification. The script now handles Bun installed at `/usr/local/bin/bun`.
+
+The install script is produced and validated against clean scratch CT 104. Validation confirmed that the script works as a standalone Proxmox-host helper from `/scripts/watchstate` without requiring the full repository layout on the host. Important validation fixes included embedded systemd service units, direct FrankenPHP static binary installation from GitHub releases, explicit Bun path handling, PATH export for Composer frontend generation, and pre-created `/opt/app` ownership for the `watchstate` service user.
 
 Rollback and uninstall notes are documented. The preferred rollback path is Proxmox snapshot rollback for full CT recovery, followed by application-level restore from backup archives when only WatchState state needs recovery. Full CT removal is the preferred uninstall path for this dedicated deployment.
 
 The troubleshooting guide is documented. It covers service health, web/scheduler issues, Redis, permissions, Git ownership, update failures, frontend output, backup/restore issues, snapshot handling, locale warnings, and final verification.
-
-The install script is produced for clean Debian LXC targets. It still needs validation in a scratch CT before being marked complete.
 
 Current validated services:
 
@@ -156,4 +156,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Validate `scripts/install-watchstate.sh` in a clean scratch CT, then choose the next workstream: reverse proxy/TLS or final install documentation.
+Choose the next workstream: final user-facing install documentation, media bind-mount validation, reverse proxy/TLS documentation, or production cutover checklist for CT 103.
