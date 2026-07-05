@@ -146,7 +146,7 @@ if [[ "${STATUS}" != "running" ]]; then
   exit 1
 fi
 
-for tool in git composer bun rsync curl redis-cli; do
+for tool in git composer rsync curl redis-cli; do
   if run_ct_sh "command -v ${tool} >/dev/null 2>&1"; then
     true
   else
@@ -155,6 +155,12 @@ for tool in git composer bun rsync curl redis-cli; do
     exit 1
   fi
 done
+
+if ! run_ct test -x /usr/local/bin/bun; then
+  echo "ERROR: Required container tool is missing: /usr/local/bin/bun" >&2
+  echo "Install missing prerequisites before updating." >&2
+  exit 1
+fi
 
 if ! run_ct test -x /opt/bin/frankenphp; then
   echo "ERROR: /opt/bin/frankenphp is missing or not executable." >&2
@@ -196,6 +202,7 @@ run_ct systemctl stop watchstate-web.service
 echo "Updating WatchState source, dependencies, frontend output, and database state."
 run_ct runuser -u watchstate -- sh -c "
 set -e
+export PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 cd /opt/app
 
 git fetch origin
@@ -204,7 +211,7 @@ git pull --ff-only origin '${BRANCH}'
 
 composer install --no-dev --prefer-dist --optimize-autoloader
 
-bun --cwd=./frontend install --frozen-lockfile
+/usr/local/bin/bun --cwd=./frontend install --frozen-lockfile
 composer frontend:gen
 
 rm -rf public/exported
