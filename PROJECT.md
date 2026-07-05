@@ -92,7 +92,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Produce update script.
 - [x] Validate update script.
 - [x] Write uninstall/rollback notes.
-- [ ] Write troubleshooting guide.
+- [x] Write troubleshooting guide.
 - [ ] Produce install script.
 
 ## Current State
@@ -112,6 +112,8 @@ The verification script is produced and validated. It supports CT name discovery
 The update script is produced and validated. It successfully performed CT name discovery, pre-update backup, retention check, Proxmox snapshot creation, source/dependency/frontend update steps, migration check, service restart, healthcheck validation, and post-update verification with 0 warnings and 0 failures.
 
 Rollback and uninstall notes are documented. The preferred rollback path is Proxmox snapshot rollback for full CT recovery, followed by application-level restore from backup archives when only WatchState state needs recovery. Full CT removal is the preferred uninstall path for this dedicated deployment.
+
+The troubleshooting guide is documented. It covers service health, web/scheduler issues, Redis, permissions, Git ownership, update failures, frontend output, backup/restore issues, snapshot handling, locale warnings, and final verification.
 
 Current validated services:
 
@@ -151,4 +153,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Choose the next workstream: troubleshooting guide, reverse proxy/TLS, install script, or final install documentation.
+Choose the next workstream: reverse proxy/TLS, install script, or final install documentation.
