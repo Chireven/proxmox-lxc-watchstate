@@ -100,10 +100,13 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Write troubleshooting guide.
 - [x] Produce install script.
 - [x] Validate install script.
+- [x] Rebuild production CT 103 using only standalone helper scripts from the repository.
 
 ## Current State
 
-WatchState is installed natively in Debian LXC CT 103. Composer dependencies are installed, frontend assets are built, the application has been initialized, Redis responds to PONG, FrankenPHP is installed, and both native WatchState services are enabled, running, and reboot-validated. The post-service snapshot exists and first web login has been completed.
+WatchState is installed natively in Debian LXC CT 103. CT 103 was torn down and rebuilt successfully using only the standalone helper scripts downloaded from this repository into `/scripts/watchstate`; the full repository was not required on the Proxmox host.
+
+The rebuilt CT is reported healthy and running normally. Composer dependencies are installed, frontend assets are built, the application has been initialized, Redis is running, FrankenPHP is installed, and both native WatchState services are expected to be enabled and running.
 
 Two Plex backends have been configured from the WatchState UI. Backup and Import jobs were created for both backends and completed successfully. Import and Export tasks are visible in the UI and enabled.
 
@@ -117,7 +120,7 @@ The verification script is produced and validated. It supports CT name discovery
 
 The update script is produced and validated. It successfully performed CT name discovery, pre-update backup, retention check, Proxmox snapshot creation, source/dependency/frontend update steps, migration check, service restart, healthcheck validation, and post-update verification. The script now handles Bun installed at `/usr/local/bin/bun`.
 
-The install script is produced and validated against clean scratch CT 104. Validation confirmed that the script works as a standalone Proxmox-host helper from `/scripts/watchstate` without requiring the full repository layout on the host. Important validation fixes included embedded systemd service units, direct FrankenPHP static binary installation from GitHub releases, explicit Bun path handling, PATH export for Composer frontend generation, and pre-created `/opt/app` ownership for the `watchstate` service user.
+The install script is produced and validated against clean scratch CT 104 and rebuilt production CT 103. Validation confirmed that the script works as a standalone Proxmox-host helper from `/scripts/watchstate` without requiring the full repository layout on the host. Important validation fixes included embedded systemd service units, direct FrankenPHP static binary installation from GitHub releases, explicit Bun path handling, PATH export for Composer frontend generation, and pre-created `/opt/app` ownership for the `watchstate` service user.
 
 Rollback and uninstall notes are documented. The preferred rollback path is Proxmox snapshot rollback for full CT recovery, followed by application-level restore from backup archives when only WatchState state needs recovery. Full CT removal is the preferred uninstall path for this dedicated deployment.
 
@@ -163,4 +166,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Validate Phase 7 media integration on CT 103 by adding Proxmox bind mounts, confirming media read access as the `watchstate` service user, validating library scan behavior, and snapshotting the completed media configuration.
+Validate Phase 7 media integration on rebuilt CT 103 by adding Proxmox bind mounts, confirming media read access as the `watchstate` service user, validating library scan behavior, and snapshotting the completed media configuration.
