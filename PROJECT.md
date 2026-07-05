@@ -71,17 +71,17 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Decide whether Debian `redis-server` remains the supported native Redis model.
 - [x] Snapshot validated Phase 6 application configuration.
 
-## Phase 7 - Media Integration
+## Phase 7 - Media Backend Integration
 
-- [x] Document Proxmox bind-mount model.
-- [x] Document media permissions model.
-- [x] Document read-only/read-write expectations.
-- [x] Document Plex/Jellyfin path mapping guidance.
-- [x] Validate Plex/Jellyfin connectivity.
-- [ ] Add Proxmox bind mounts after app is healthy.
-- [ ] Validate media read access from the `watchstate` service user.
-- [ ] Validate library scan behavior.
-- [ ] Snapshot validated Phase 7 media integration.
+- [x] Document that media bind mounts are not required by default.
+- [x] Document API-based Plex/Jellyfin media-backend integration model.
+- [x] Document optional path matching behavior.
+- [x] Validate Plex/Jellyfin backend connectivity.
+- [ ] Validate watched-state import from Plex server A.
+- [ ] Validate watched-state export/sync to Plex server B.
+- [ ] Validate reverse direction if bidirectional sync is intended.
+- [ ] Review unmatched or mismatched items.
+- [ ] Snapshot validated Phase 7 API sync configuration.
 
 ## Phase 8 - Operations
 
@@ -126,7 +126,7 @@ Rollback and uninstall notes are documented. The preferred rollback path is Prox
 
 The troubleshooting guide is documented. It covers service health, web/scheduler issues, Redis, permissions, Git ownership, update failures, frontend output, backup/restore issues, snapshot handling, locale warnings, and final verification.
 
-Phase 7 media integration documentation has started. The media guide documents Proxmox bind mounts, read-only defaults, shared media group permissions, Plex/Jellyfin path mapping, WatchState UI validation, and troubleshooting. Live bind-mount and library scan validation remain open.
+Phase 7 media-backend integration documentation has been corrected. The media guide now treats WatchState as an API-based watched-state sync application. Media bind mounts are documented as optional troubleshooting-only mounts, not as a required part of normal WatchState operation. Live validation now focuses on watched-state import/export behavior between Plex backends.
 
 Current validated services:
 
@@ -166,4 +166,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Validate Phase 7 media integration on rebuilt CT 103 by adding Proxmox bind mounts, confirming media read access as the `watchstate` service user, validating library scan behavior, and snapshotting the completed media configuration.
+Validate Phase 7 media-backend integration on rebuilt CT 103 by confirming watched-state import from Plex server A, watched-state export/sync to Plex server B, reverse-direction behavior if bidirectional sync is intended, unmatched item handling, and then snapshotting the completed API sync configuration.
