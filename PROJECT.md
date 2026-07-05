@@ -77,6 +77,8 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Document API-based Plex/Jellyfin media-backend integration model.
 - [x] Document optional path matching behavior.
 - [x] Validate Plex/Jellyfin backend connectivity.
+- [x] Add sanitized verifier support-bundle mode for backend topology diagnostics.
+- [ ] Validate sanitized support-bundle output on rebuilt CT 103.
 - [ ] Validate watched-state import from Plex server A.
 - [ ] Validate watched-state export/sync to Plex server B.
 - [ ] Validate reverse direction if bidirectional sync is intended.
@@ -116,7 +118,7 @@ Backup and restore operations are validated. The host-side backup script creates
 
 The native update procedure is validated. Required corrections discovered during testing are documented: `rsync` must be installed, frontend output must be synced from `/opt/app/frontend/exported` to `/opt/app/public/exported`, database migrations must use `db:migrate --execute --no-interaction`, and update-time frontend generation must use `/usr/local/bin/bun` or export a PATH that includes `/usr/local/bin`.
 
-The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, and frontend output. Verification output is color-coded for easier review and includes a compact final pass/warning/failure summary.
+The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, frontend output, and optional sanitized backend support-bundle output. Verification output is color-coded for easier review and includes a compact final pass/warning/failure summary.
 
 The update script is produced and validated. It successfully performed CT name discovery, pre-update backup, retention check, Proxmox snapshot creation, source/dependency/frontend update steps, migration check, service restart, healthcheck validation, and post-update verification. The script now handles Bun installed at `/usr/local/bin/bun`.
 
@@ -126,7 +128,7 @@ Rollback and uninstall notes are documented. The preferred rollback path is Prox
 
 The troubleshooting guide is documented. It covers service health, web/scheduler issues, Redis, permissions, Git ownership, update failures, frontend output, backup/restore issues, snapshot handling, locale warnings, and final verification.
 
-Phase 7 media-backend integration documentation has been corrected. The media guide now treats WatchState as an API-based watched-state sync application. Media bind mounts are documented as optional troubleshooting-only mounts, not as a required part of normal WatchState operation. Live validation now focuses on watched-state import/export behavior between Plex backends.
+Phase 7 media-backend integration documentation has been corrected. The media guide now treats WatchState as an API-based watched-state sync application. Media bind mounts are documented as optional troubleshooting-only mounts, not as a required part of normal WatchState operation. Live validation now focuses on watched-state import/export behavior between Plex backends. The verifier now has an initial sanitized support-bundle mode to summarize backend topology from WatchState configuration.
 
 Current validated services:
 
@@ -166,4 +168,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Validate Phase 7 media-backend integration on rebuilt CT 103 by confirming watched-state import from Plex server A, watched-state export/sync to Plex server B, reverse-direction behavior if bidirectional sync is intended, unmatched item handling, and then snapshotting the completed API sync configuration.
+Validate the new sanitized support-bundle mode on rebuilt CT 103, then use it to guide watched-state import/export validation between Plex backends.
