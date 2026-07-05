@@ -41,6 +41,7 @@ SKIP_VERIFY="0"
 FORCE="0"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+SERVICE_TEMPLATE_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -151,6 +152,94 @@ run_ct_sh() {
   pct exec "${CTID}" -- sh -c "$1"
 }
 
+find_service_template_dir() {
+  local candidate
+  for candidate in "${REPO_ROOT}/systemd" "${SCRIPT_DIR}/systemd" "$(pwd)/systemd"; do
+    if [[ -f "${candidate}/watchstate-web.service" && -f "${candidate}/watchstate-scheduler.service" ]]; then
+      SERVICE_TEMPLATE_DIR="${candidate}"
+      return 0
+    fi
+  done
+
+  SERVICE_TEMPLATE_DIR=""
+  return 1
+}
+
+install_embedded_service_units() {
+  run_ct_sh "cat > /etc/systemd/system/watchstate-web.service <<'EOF'
+[Unit]
+Description=WatchState web service
+Documentation=https://github.com/arabcoders/watchstate
+Wants=network-online.target redis-server.service
+After=network-online.target redis-server.service
+
+[Service]
+Type=simple
+User=watchstate
+Group=watchstate
+WorkingDirectory=/config
+Environment=IN_CONTAINER=1
+Environment=WS_DATA_PATH=/config
+Environment=WS_TZ=UTC
+Environment=PATH=/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/opt/bin/frankenphp php-server --listen 0.0.0.0:8080 --root /opt/app/public
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=false
+ProtectSystem=full
+ReadWritePaths=/config /tmp
+
+[Install]
+WantedBy=multi-user.target
+EOF
+cat > /etc/systemd/system/watchstate-scheduler.service <<'EOF'
+[Unit]
+Description=WatchState scheduler service
+Documentation=https://github.com/arabcoders/watchstate
+Wants=network-online.target redis-server.service watchstate-web.service
+After=network-online.target redis-server.service watchstate-web.service
+
+[Service]
+Type=simple
+User=watchstate
+Group=watchstate
+WorkingDirectory=/config
+Environment=IN_CONTAINER=1
+Environment=WS_DATA_PATH=/config
+Environment=WS_TZ=UTC
+Environment=PATH=/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/bin/bash -lc 'while true; do /opt/bin/frankenphp php-cli /opt/app/bin/console system:scheduler --pid-file /tmp/ws-job-runner.pid; sleep 60; done'
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=false
+ProtectSystem=full
+ReadWritePaths=/config /tmp
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"
+}
+
+install_service_units() {
+  if find_service_template_dir; then
+    echo "Using systemd service templates from: ${SERVICE_TEMPLATE_DIR}"
+    pct push "${CTID}" "${SERVICE_TEMPLATE_DIR}/watchstate-web.service" /etc/systemd/system/watchstate-web.service
+    pct push "${CTID}" "${SERVICE_TEMPLATE_DIR}/watchstate-scheduler.service" /etc/systemd/system/watchstate-scheduler.service
+  else
+    echo "Systemd service templates were not found next to the script; writing embedded service units."
+    install_embedded_service_units
+  fi
+}
+
 resolve_ctid
 
 if ! pct status "${CTID}" >/dev/null 2>&1; then
@@ -161,11 +250,6 @@ fi
 STATUS="$(pct status "${CTID}" | awk '{print $2}')"
 if [[ "${STATUS}" != "running" ]]; then
   echo "ERROR: CT ${CTID} is not running. Current status: ${STATUS}" >&2
-  exit 1
-fi
-
-if [[ ! -f "${REPO_ROOT}/systemd/watchstate-web.service" || ! -f "${REPO_ROOT}/systemd/watchstate-scheduler.service" ]]; then
-  echo "ERROR: systemd service templates were not found under ${REPO_ROOT}/systemd." >&2
   exit 1
 fi
 
@@ -326,8 +410,7 @@ CONTAINER_INIT=1 /opt/bin/frankenphp php-cli bin/console db:migrate --execute --
 "
 
 echo "Installing systemd service units."
-pct push "${CTID}" "${REPO_ROOT}/systemd/watchstate-web.service" /etc/systemd/system/watchstate-web.service
-pct push "${CTID}" "${REPO_ROOT}/systemd/watchstate-scheduler.service" /etc/systemd/system/watchstate-scheduler.service
+install_service_units
 
 run_ct systemctl daemon-reload
 run_ct systemctl enable --now redis-server.service
