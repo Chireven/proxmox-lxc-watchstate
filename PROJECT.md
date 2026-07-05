@@ -78,6 +78,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Document optional path matching behavior.
 - [x] Validate Plex/Jellyfin backend connectivity.
 - [x] Add sanitized verifier support-bundle mode for backend topology diagnostics.
+- [x] Add inferred identity sync relationship diagnostics to support-bundle mode.
 - [x] Validate sanitized support-bundle output on rebuilt CT 103.
 - [ ] Validate watched-state import from Plex server A.
 - [ ] Validate watched-state export/sync to Plex server B.
@@ -118,7 +119,7 @@ Backup and restore operations are validated. The host-side backup script creates
 
 The native update procedure is validated. Required corrections discovered during testing are documented: `rsync` must be installed, frontend output must be synced from `/opt/app/frontend/exported` to `/opt/app/public/exported`, database migrations must use `db:migrate --execute --no-interaction`, and update-time frontend generation must use `/usr/local/bin/bun` or export a PATH that includes `/usr/local/bin`.
 
-The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, frontend output, and optional sanitized backend support-bundle output. Verification output is color-coded for easier review and includes a compact final pass/warning/failure summary.
+The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, frontend output, and optional sanitized backend support-bundle output. Support-bundle mode now reports sanitized backend topology, aggregate state statistics, and inferred same-identity sync relationships. Verification output is color-coded for easier review and includes a compact final pass/warning/failure summary.
 
 The update script is produced and validated. It successfully performed CT name discovery, pre-update backup, retention check, Proxmox snapshot creation, source/dependency/frontend update steps, migration check, service restart, healthcheck validation, and post-update verification. The script now handles Bun installed at `/usr/local/bin/bun`.
 
