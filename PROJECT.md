@@ -78,7 +78,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Document optional path matching behavior.
 - [x] Validate Plex/Jellyfin backend connectivity.
 - [x] Add sanitized verifier support-bundle mode for backend topology diagnostics.
-- [ ] Validate sanitized support-bundle output on rebuilt CT 103.
+- [x] Validate sanitized support-bundle output on rebuilt CT 103.
 - [ ] Validate watched-state import from Plex server A.
 - [ ] Validate watched-state export/sync to Plex server B.
 - [ ] Validate reverse direction if bidirectional sync is intended.
@@ -110,7 +110,7 @@ WatchState is installed natively in Debian LXC CT 103. CT 103 was torn down and 
 
 The rebuilt CT is reported healthy and running normally. Composer dependencies are installed, frontend assets are built, the application has been initialized, Redis is running, FrankenPHP is installed, and both native WatchState services are expected to be enabled and running.
 
-Two Plex backends have been configured from the WatchState UI. Backup and Import jobs were created for both backends and completed successfully. Import and Export tasks are visible in the UI and enabled.
+Two Plex backends have been configured from the WatchState UI. The sanitized support bundle confirms both backends are reachable, both have import enabled, both currently have export disabled, and both share the same sanitized identity mapping. Aggregate database statistics confirm imported WatchState state exists for one backend without exposing media titles, paths, users, backend names, or tokens.
 
 Cron validation found no crontab for the WatchState service user and no WatchState-specific cron entries in the standard cron directories. The scheduler is handled by the enabled and running `watchstate-scheduler.service` unit.
 
@@ -128,7 +128,7 @@ Rollback and uninstall notes are documented. The preferred rollback path is Prox
 
 The troubleshooting guide is documented. It covers service health, web/scheduler issues, Redis, permissions, Git ownership, update failures, frontend output, backup/restore issues, snapshot handling, locale warnings, and final verification.
 
-Phase 7 media-backend integration documentation has been corrected. The media guide now treats WatchState as an API-based watched-state sync application. Media bind mounts are documented as optional troubleshooting-only mounts, not as a required part of normal WatchState operation. Live validation now focuses on watched-state import/export behavior between Plex backends. The verifier now has an initial sanitized support-bundle mode to summarize backend topology from WatchState configuration.
+Phase 7 media-backend integration documentation has been corrected. The media guide now treats WatchState as an API-based watched-state sync application. Media bind mounts are documented as optional troubleshooting-only mounts, not as a required part of normal WatchState operation. Live validation now focuses on watched-state import/export behavior between Plex backends. The verifier support-bundle mode is validated and now provides sanitized backend topology plus aggregate state statistics.
 
 Current validated services:
 
@@ -168,4 +168,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Validate the new sanitized support-bundle mode on rebuilt CT 103, then use it to guide watched-state import/export validation between Plex backends.
+Enable export for the intended target backend or both backends, run an import for the second backend so aggregate state exists for both sides, then use the sanitized support bundle to guide watched-state import/export validation between Plex backends.
