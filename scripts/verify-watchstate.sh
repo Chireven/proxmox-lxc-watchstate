@@ -465,6 +465,23 @@ function probe_backend(mixed $url, mixed $type): string {
     if (false === $result) { return 'failed'; }
     return 'ok';
 }
+function relationship_reason(bool $leftToRight, bool $rightToLeft, array $left, array $right): string {
+    if ($leftToRight && $rightToLeft) { return 'bidirectional-import-export-enabled'; }
+    if ($leftToRight) { return 'left-imports-and-right-exports'; }
+    if ($rightToLeft) { return 'right-imports-and-left-exports'; }
+    $reasons = [];
+    if (!$left['import'] && !$right['import']) { $reasons[] = 'imports-disabled'; }
+    if (!$left['export'] && !$right['export']) { $reasons[] = 'exports-disabled'; }
+    if ($left['import'] && !$right['export']) { $reasons[] = 'left-import-enabled-but-right-export-disabled'; }
+    if ($right['import'] && !$left['export']) { $reasons[] = 'right-import-enabled-but-left-export-disabled'; }
+    return implode(',', array_unique($reasons)) ?: 'no-compatible-import-export-path';
+}
+function relationship_symbol(bool $leftToRight, bool $rightToLeft): string {
+    if ($leftToRight && $rightToLeft) { return '<>'; }
+    if ($leftToRight) { return '>'; }
+    if ($rightToLeft) { return '<'; }
+    return 'x';
+}
 function q(PDO $pdo, string $sql, array $params = []): mixed {
     try {
         $stmt = $pdo->prepare($sql);
@@ -474,13 +491,13 @@ function q(PDO $pdo, string $sql, array $params = []): mixed {
         return null;
     }
 }
+function quote_identifier(string $identifier): string {
+    return '"' . str_replace('"', '""', $identifier) . '"';
+}
 function table_columns(PDO $pdo, string $table): array {
     $rows = q($pdo, 'PRAGMA table_info(' . quote_identifier($table) . ')');
     if (!is_array($rows)) { return []; }
     return array_map(static fn(array $row): string => (string) $row['name'], $rows);
-}
-function quote_identifier(string $identifier): string {
-    return '"' . str_replace('"', '""', $identifier) . '"';
 }
 function count_query(PDO $pdo, string $table, string $where = '', array $params = []): int {
     $sql = 'SELECT COUNT(*) AS c FROM ' . quote_identifier($table) . ('' !== $where ? ' WHERE ' . $where : '');
@@ -577,6 +594,29 @@ foreach ($backends as $backend) {
 }
 
 out('');
+out('Identity Sync Relationships');
+out('- source=inferred-from-config note=direction-requires-source-import-and-target-export');
+$relationshipCount = 0;
+$activeRelationshipCount = 0;
+for ($i = 0; $i < count($summary); $i++) {
+    for ($j = $i + 1; $j < count($summary); $j++) {
+        $left = $summary[$i];
+        $right = $summary[$j];
+        if ($left['user'] !== $right['user']) { continue; }
+        $leftToRight = true === $left['import'] && true === $right['export'];
+        $rightToLeft = true === $right['import'] && true === $left['export'];
+        $symbol = relationship_symbol($leftToRight, $rightToLeft);
+        $reason = relationship_reason($leftToRight, $rightToLeft, $left, $right);
+        if ('x' !== $symbol) { $activeRelationshipCount++; }
+        $relationshipCount++;
+        out(sprintf('- %s\\%s  %s  %s\\%s reason=%s', $left['label'], $left['user'], $symbol, $right['label'], $right['user'], $reason));
+    }
+}
+if (0 === $relationshipCount) {
+    out('- no same-identity backend pairs discovered');
+}
+
+out('');
 out('Operational Statistics');
 $stateStatsFound = false;
 if (!file_exists($dbFile)) {
@@ -629,6 +669,7 @@ if (!file_exists($dbFile)) {
 out('');
 out('Readiness Findings');
 out(sprintf('- configured_backends=%d import_enabled=%d export_enabled=%d reachable=%d', count($summary), $importCount, $exportCount, $reachableCount));
+out(sprintf('- identity_relationships=%d active_identity_relationships=%d', $relationshipCount, $activeRelationshipCount));
 if (count($summary) < 2) {
     out('- sync_validation=not-ready reason=at-least-two-backends-are-needed-for-backend-to-backend-sync');
 }
@@ -638,6 +679,9 @@ if ($importCount < 1) {
 if ($exportCount < 1) {
     out('- export_validation=not-ready reason=no-export-enabled-backend-found');
 }
+if ($relationshipCount > 0 && $activeRelationshipCount < 1) {
+    out('- relationship_validation=not-ready reason=no-active-import-to-export-identity-relationship');
+}
 if ($stateStatsFound) {
     out('- state_database=present reason=imported-state-statistics-discovered');
 } else {
@@ -646,7 +690,7 @@ if ($stateStatsFound) {
 if ($reachableCount < count($summary)) {
     out('- reachability=review reason=one-or-more-backends-did-not-respond-to-basic-probe');
 }
-if (count($summary) >= 2 && $importCount >= 1 && $exportCount >= 1) {
+if (count($summary) >= 2 && $importCount >= 1 && $exportCount >= 1 && $activeRelationshipCount >= 1) {
     out('- sync_validation=ready-for-manual-watched-state-test');
 }
 
