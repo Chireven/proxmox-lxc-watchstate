@@ -402,9 +402,9 @@ $serversFile = '/config/config/servers.yaml';
 $autoload = '/opt/app/vendor/autoload.php';
 
 function out(string $line = ''): void { echo $line . PHP_EOL; }
-function yesno(mixed $value): string { return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'enabled' : 'disabled'; }
 function stamp(mixed $value): string {
     if (null === $value || '' === $value || false === $value) { return 'never'; }
+    if (is_numeric($value) && (int) $value <= 0) { return 'never'; }
     if (is_numeric($value)) { return date('c', (int) $value); }
     return (string) $value;
 }
@@ -498,6 +498,10 @@ if (0 === count($backends)) {
 }
 
 $summary = [];
+$importCount = 0;
+$exportCount = 0;
+$reachableCount = 0;
+
 out('Backend Summary');
 foreach ($backends as $backend) {
     $name = (string) getv($backend, 'name', 'unknown');
@@ -509,12 +513,17 @@ foreach ($backends as $backend) {
     $exportEnabled = filter_var(getv($backend, 'export.enabled', false), FILTER_VALIDATE_BOOLEAN);
     $reachability = probe_backend(getv($backend, 'url', ''), $type);
 
+    if ($importEnabled) { $importCount++; }
+    if ($exportEnabled) { $exportCount++; }
+    if ('ok' === $reachability) { $reachableCount++; }
+
     $summary[] = [
         'label' => $label,
         'type' => $type,
         'user' => $user,
         'import' => $importEnabled,
         'export' => $exportEnabled,
+        'reachability' => $reachability,
     ];
 
     out(sprintf(
@@ -530,6 +539,25 @@ foreach ($backends as $backend) {
         stamp(getv($backend, 'export.lastSync')),
         $reachability
     ));
+}
+
+out('');
+out('Readiness Findings');
+out(sprintf('- configured_backends=%d import_enabled=%d export_enabled=%d reachable=%d', count($summary), $importCount, $exportCount, $reachableCount));
+if (count($summary) < 2) {
+    out('- sync_validation=not-ready reason=at-least-two-backends-are-needed-for-backend-to-backend-sync');
+}
+if ($importCount < 1) {
+    out('- import_validation=not-ready reason=no-import-enabled-backend-found');
+}
+if ($exportCount < 1) {
+    out('- export_validation=not-ready reason=no-export-enabled-backend-found');
+}
+if ($reachableCount < count($summary)) {
+    out('- reachability=review reason=one-or-more-backends-did-not-respond-to-basic-probe');
+}
+if (count($summary) >= 2 && $importCount >= 1 && $exportCount >= 1) {
+    out('- sync_validation=ready-for-manual-watched-state-test');
 }
 
 out('');
