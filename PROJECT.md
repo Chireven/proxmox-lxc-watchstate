@@ -93,7 +93,8 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Validate update script.
 - [x] Write uninstall/rollback notes.
 - [x] Write troubleshooting guide.
-- [ ] Produce install script.
+- [x] Produce install script.
+- [ ] Validate install script.
 
 ## Current State
 
@@ -114,6 +115,8 @@ The update script is produced and validated. It successfully performed CT name d
 Rollback and uninstall notes are documented. The preferred rollback path is Proxmox snapshot rollback for full CT recovery, followed by application-level restore from backup archives when only WatchState state needs recovery. Full CT removal is the preferred uninstall path for this dedicated deployment.
 
 The troubleshooting guide is documented. It covers service health, web/scheduler issues, Redis, permissions, Git ownership, update failures, frontend output, backup/restore issues, snapshot handling, locale warnings, and final verification.
+
+The install script is produced for clean Debian LXC targets. It still needs validation in a scratch CT before being marked complete.
 
 Current validated services:
 
@@ -153,4 +156,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Choose the next workstream: reverse proxy/TLS, install script, or final install documentation.
+Validate `scripts/install-watchstate.sh` in a clean scratch CT, then choose the next workstream: reverse proxy/TLS or final install documentation.
