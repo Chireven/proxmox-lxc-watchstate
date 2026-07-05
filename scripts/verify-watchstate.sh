@@ -403,6 +403,7 @@ $autoload = '/opt/app/vendor/autoload.php';
 $dbFile = '/config/db/watchstate_v02.db';
 
 function out(string $line = ''): void { echo $line . PHP_EOL; }
+function yn(bool $value): string { return $value ? 'yes' : 'no'; }
 function stamp(mixed $value): string {
     if (null === $value || '' === $value || false === $value) { return 'never'; }
     if (is_numeric($value) && (int) $value <= 0) { return 'never'; }
@@ -416,6 +417,24 @@ function getv(array $array, string $path, mixed $default = null): mixed {
         $current = $current[$part];
     }
     return $current;
+}
+function line(): void { out(str_repeat('-', 96)); }
+function table(array $headers, array $rows): void {
+    $widths = [];
+    foreach ($headers as $i => $header) { $widths[$i] = strlen((string) $header); }
+    foreach ($rows as $row) {
+        foreach ($headers as $i => $_) {
+            $widths[$i] = max($widths[$i], strlen((string) ($row[$i] ?? '')));
+        }
+    }
+    $formatParts = [];
+    foreach ($widths as $w) { $formatParts[] = '%-' . $w . 's'; }
+    $format = implode('  ', $formatParts) . PHP_EOL;
+    printf($format, ...$headers);
+    $sep = [];
+    foreach ($widths as $w) { $sep[] = str_repeat('-', $w); }
+    printf($format, ...$sep);
+    foreach ($rows as $row) { printf($format, ...array_map('strval', $row)); }
 }
 
 $maps = [];
@@ -457,24 +476,20 @@ function normalize_servers(mixed $servers): array {
 function probe_backend(mixed $url, mixed $type): string {
     $url = trim((string) $url);
     $type = strtolower((string) $type);
-    if ('' === $url) { return 'skipped-empty-url'; }
+    if ('' === $url) { return 'skipped'; }
     $target = rtrim($url, '/');
     if ('plex' === $type) { $target .= '/identity'; }
     $context = stream_context_create(['http' => ['timeout' => 4, 'ignore_errors' => true], 'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
-    $result = @file_get_contents($target, false, $context);
-    if (false === $result) { return 'failed'; }
-    return 'ok';
+    return false === @file_get_contents($target, false, $context) ? 'failed' : 'ok';
 }
 function relationship_reason(bool $leftToRight, bool $rightToLeft, array $left, array $right): string {
-    if ($leftToRight && $rightToLeft) { return 'bidirectional-import-export-enabled'; }
-    if ($leftToRight) { return 'left-imports-and-right-exports'; }
-    if ($rightToLeft) { return 'right-imports-and-left-exports'; }
-    $reasons = [];
-    if (!$left['import'] && !$right['import']) { $reasons[] = 'imports-disabled'; }
-    if (!$left['export'] && !$right['export']) { $reasons[] = 'exports-disabled'; }
-    if ($left['import'] && !$right['export']) { $reasons[] = 'left-import-enabled-but-right-export-disabled'; }
-    if ($right['import'] && !$left['export']) { $reasons[] = 'right-import-enabled-but-left-export-disabled'; }
-    return implode(',', array_unique($reasons)) ?: 'no-compatible-import-export-path';
+    if ($leftToRight && $rightToLeft) { return 'bidirectional ready'; }
+    if ($leftToRight) { return 'left imports, right exports'; }
+    if ($rightToLeft) { return 'right imports, left exports'; }
+    if (!$left['export'] && !$right['export']) { return 'exports disabled on both'; }
+    if ($left['import'] && !$right['export']) { return 'right export disabled'; }
+    if ($right['import'] && !$left['export']) { return 'left export disabled'; }
+    return 'no compatible import/export path';
 }
 function relationship_symbol(bool $leftToRight, bool $rightToLeft): string {
     if ($leftToRight && $rightToLeft) { return '<>'; }
@@ -487,23 +502,18 @@ function q(PDO $pdo, string $sql, array $params = []): mixed {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable) {
-        return null;
-    }
+    } catch (Throwable) { return null; }
 }
-function quote_identifier(string $identifier): string {
-    return '"' . str_replace('"', '""', $identifier) . '"';
-}
+function quote_identifier(string $identifier): string { return '"' . str_replace('"', '""', $identifier) . '"'; }
 function table_columns(PDO $pdo, string $table): array {
     $rows = q($pdo, 'PRAGMA table_info(' . quote_identifier($table) . ')');
     if (!is_array($rows)) { return []; }
     return array_map(static fn(array $row): string => (string) $row['name'], $rows);
 }
-function count_query(PDO $pdo, string $table, string $where = '', array $params = []): int {
+function count_query(PDO $pdo, string $table, string $where = ''): int {
     $sql = 'SELECT COUNT(*) AS c FROM ' . quote_identifier($table) . ('' !== $where ? ' WHERE ' . $where : '');
-    $rows = q($pdo, $sql, $params);
-    if (!is_array($rows) || !isset($rows[0]['c'])) { return 0; }
-    return (int) $rows[0]['c'];
+    $rows = q($pdo, $sql);
+    return is_array($rows) && isset($rows[0]['c']) ? (int) $rows[0]['c'] : 0;
 }
 function max_timestamp(PDO $pdo, string $table, array $columns): string {
     foreach (['updated_at', 'updated', 'created_at'] as $column) {
@@ -514,88 +524,46 @@ function max_timestamp(PDO $pdo, string $table, array $columns): string {
     return 'unknown';
 }
 
-out('Support bundle mode: ' . ($sanitize ? 'sanitized' : 'unsanitized'));
-out('Source: /config/config/servers.yaml');
+out('WatchState Backend Support Bundle');
+line();
+out('Mode:        ' . ($sanitize ? 'sanitized' : 'unsanitized'));
+out('Source:      /config/config/servers.yaml');
+out('Scope:       API/backend configuration and aggregate state diagnostics');
+out('Privacy:     backend names, URLs, users, and state sources are placeholdered when sanitized');
+line();
 
-if (!file_exists($serversFile)) {
-    out('Backend Summary');
-    out('- servers.yaml not found; no configured backends discovered from config file');
-    exit(0);
-}
-
-if (!file_exists($autoload)) {
-    out('Backend Summary');
-    out('- vendor autoload not found; cannot parse servers.yaml');
-    exit(0);
-}
-
+if (!file_exists($serversFile)) { out('No servers.yaml found; backend report unavailable.'); exit(0); }
+if (!file_exists($autoload)) { out('Vendor autoload missing; backend report unavailable.'); exit(0); }
 require $autoload;
-
-try {
-    $servers = Symfony\Component\Yaml\Yaml::parseFile($serversFile);
-} catch (Throwable $e) {
-    out('Backend Summary');
-    out('- failed to parse servers.yaml: ' . $e->getMessage());
-    exit(0);
-}
-
+try { $servers = Symfony\Component\Yaml\Yaml::parseFile($serversFile); }
+catch (Throwable $e) { out('Could not parse servers.yaml: ' . $e->getMessage()); exit(0); }
 $backends = normalize_servers($servers);
-if (0 === count($backends)) {
-    out('Backend Summary');
-    out('- no configured backends found in servers.yaml');
-    exit(0);
-}
+if (0 === count($backends)) { out('No configured backends found.'); exit(0); }
 
 $summary = [];
 $importCount = 0;
 $exportCount = 0;
 $reachableCount = 0;
 $rawToLabel = [];
+$backendRows = [];
 
-out('Backend Summary');
 foreach ($backends as $backend) {
     $name = (string) getv($backend, 'name', 'unknown');
     $type = (string) getv($backend, 'type', 'unknown');
     $label = backend_label($type, $name);
     $rawToLabel[$name] = $label;
     $user = identity_label(getv($backend, 'user', 'unknown'));
-    $url = safe_url(getv($backend, 'url', ''), $label);
     $importEnabled = filter_var(getv($backend, 'import.enabled', false), FILTER_VALIDATE_BOOLEAN);
     $exportEnabled = filter_var(getv($backend, 'export.enabled', false), FILTER_VALIDATE_BOOLEAN);
     $reachability = probe_backend(getv($backend, 'url', ''), $type);
-
     if ($importEnabled) { $importCount++; }
     if ($exportEnabled) { $exportCount++; }
     if ('ok' === $reachability) { $reachableCount++; }
-
-    $summary[] = [
-        'raw_name' => $name,
-        'label' => $label,
-        'type' => $type,
-        'user' => $user,
-        'import' => $importEnabled,
-        'export' => $exportEnabled,
-        'reachability' => $reachability,
-    ];
-
-    out(sprintf(
-        '- %s type=%s url=%s user=%s token=%s import=%s export=%s last_import=%s last_export=%s reachability=%s',
-        $label,
-        $type,
-        $url,
-        $user,
-        token_state(getv($backend, 'token', '')),
-        $importEnabled ? 'enabled' : 'disabled',
-        $exportEnabled ? 'enabled' : 'disabled',
-        stamp(getv($backend, 'import.lastSync')),
-        stamp(getv($backend, 'export.lastSync')),
-        $reachability
-    ));
+    $summary[] = ['raw_name' => $name, 'label' => $label, 'type' => $type, 'user' => $user, 'import' => $importEnabled, 'export' => $exportEnabled, 'reachability' => $reachability];
+    $backendRows[] = [$label, $type, $user, yn($importEnabled), yn($exportEnabled), stamp(getv($backend, 'import.lastSync')), stamp(getv($backend, 'export.lastSync')), $reachability, token_state(getv($backend, 'token', ''))];
 }
 
-out('');
-out('Identity Sync Relationships');
-out('- source=inferred-from-config note=direction-requires-source-import-and-target-export');
+$relationshipRows = [];
 $relationshipCount = 0;
 $activeRelationshipCount = 0;
 for ($i = 0; $i < count($summary); $i++) {
@@ -606,120 +574,90 @@ for ($i = 0; $i < count($summary); $i++) {
         $leftToRight = true === $left['import'] && true === $right['export'];
         $rightToLeft = true === $right['import'] && true === $left['export'];
         $symbol = relationship_symbol($leftToRight, $rightToLeft);
-        $reason = relationship_reason($leftToRight, $rightToLeft, $left, $right);
         if ('x' !== $symbol) { $activeRelationshipCount++; }
         $relationshipCount++;
-        out(sprintf('- %s\\%s  %s  %s\\%s reason=%s', $left['label'], $left['user'], $symbol, $right['label'], $right['user'], $reason));
+        $relationshipRows[] = [$left['label'] . '\\' . $left['user'], $symbol, $right['label'] . '\\' . $right['user'], relationship_reason($leftToRight, $rightToLeft, $left, $right)];
     }
 }
-if (0 === $relationshipCount) {
-    out('- no same-identity backend pairs discovered');
-}
 
-out('');
-out('Operational Statistics');
 $stateStatsFound = false;
-if (!file_exists($dbFile)) {
-    out('- database=missing path=/config/db/watchstate_v02.db');
-} else {
+$databaseStatus = 'missing';
+$tableCount = 0;
+$stateRows = [];
+$typeRows = [];
+$stateBackendRows = [];
+if (file_exists($dbFile)) {
     try {
         $pdo = new PDO('sqlite:' . $dbFile);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $tables = q($pdo, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
         $tableNames = is_array($tables) ? array_map(static fn(array $row): string => (string) $row['name'], $tables) : [];
-        out('- database=present tables=' . count($tableNames));
-
+        $databaseStatus = 'present';
+        $tableCount = count($tableNames);
         foreach ($tableNames as $table) {
             $columns = table_columns($pdo, $table);
-            $hasStateColumns = in_array('via', $columns, true) && in_array('watched', $columns, true) && in_array('type', $columns, true);
-            if (!$hasStateColumns) { continue; }
-
+            if (!(in_array('via', $columns, true) && in_array('watched', $columns, true) && in_array('type', $columns, true))) { continue; }
             $stateStatsFound = true;
-            $total = count_query($pdo, $table);
-            $watched = count_query($pdo, $table, 'watched > 0');
-            $unwatched = count_query($pdo, $table, 'watched = 0 OR watched IS NULL');
-            $updated = max_timestamp($pdo, $table, $columns);
-            out(sprintf('- state_table=%s total=%d watched=%d unwatched=%d latest_update=%s', $table, $total, $watched, $unwatched, $updated));
-
+            $stateRows[] = [$table, count_query($pdo, $table), count_query($pdo, $table, 'watched > 0'), count_query($pdo, $table, 'watched = 0 OR watched IS NULL'), max_timestamp($pdo, $table, $columns)];
             $byType = q($pdo, 'SELECT type, COUNT(*) AS c FROM ' . quote_identifier($table) . ' GROUP BY type ORDER BY c DESC');
-            if (is_array($byType)) {
-                foreach ($byType as $row) {
-                    out(sprintf('  type=%s count=%d', (string) $row['type'], (int) $row['c']));
-                }
-            }
-
+            if (is_array($byType)) { foreach ($byType as $row) { $typeRows[] = [(string) $row['type'], (int) $row['c']]; } }
             $byBackend = q($pdo, 'SELECT via, COUNT(*) AS total, SUM(CASE WHEN watched > 0 THEN 1 ELSE 0 END) AS watched, MAX(COALESCE(NULLIF(updated_at, 0), NULLIF(updated, 0), created_at)) AS latest FROM ' . quote_identifier($table) . ' GROUP BY via ORDER BY total DESC');
             if (is_array($byBackend)) {
                 foreach ($byBackend as $row) {
                     $rawVia = (string) ($row['via'] ?? 'unknown');
                     $label = $rawToLabel[$rawVia] ?? placeholder('state-backend', $rawVia);
-                    out(sprintf('  backend=%s total=%d watched=%d latest=%s', $label, (int) $row['total'], (int) $row['watched'], stamp($row['latest'] ?? null)));
+                    $stateBackendRows[] = [$label, (int) $row['total'], (int) $row['watched'], stamp($row['latest'] ?? null)];
                 }
             }
         }
-
-        if (!$stateStatsFound) {
-            out('- state_stats=not-found reason=no-table-with-via-watched-type-columns-discovered');
-        }
-    } catch (Throwable $e) {
-        out('- database_stats=failed reason=' . $e->getMessage());
-    }
+    } catch (Throwable $e) { $databaseStatus = 'error: ' . $e->getMessage(); }
 }
 
+$findings = [];
+$findings[] = sprintf('Configured backends: %d; reachable: %d; import enabled: %d; export enabled: %d.', count($summary), $reachableCount, $importCount, $exportCount);
+if ($relationshipCount < 1) { $findings[] = 'No same-identity backend pair was discovered.'; }
+elseif ($activeRelationshipCount < 1) { $findings[] = 'Same-identity backend pair exists, but no active sync relationship is currently inferred.'; }
+else { $findings[] = sprintf('Active sync relationships inferred: %d.', $activeRelationshipCount); }
+if ($stateStatsFound) { $findings[] = 'Imported WatchState state exists in the database.'; }
+else { $findings[] = 'No imported state statistics were discovered.'; }
+if ($exportCount < 1) { $findings[] = 'Exports are disabled, so backend-to-backend watched-state sync is not ready.'; }
+elseif ($activeRelationshipCount >= 1) { $findings[] = 'Ready for a manual watched-state sync test.'; }
+
+out('Findings');
+foreach ($findings as $finding) { out('- ' . $finding); }
 out('');
-out('Readiness Findings');
-out(sprintf('- configured_backends=%d import_enabled=%d export_enabled=%d reachable=%d', count($summary), $importCount, $exportCount, $reachableCount));
-out(sprintf('- identity_relationships=%d active_identity_relationships=%d', $relationshipCount, $activeRelationshipCount));
-if (count($summary) < 2) {
-    out('- sync_validation=not-ready reason=at-least-two-backends-are-needed-for-backend-to-backend-sync');
-}
-if ($importCount < 1) {
-    out('- import_validation=not-ready reason=no-import-enabled-backend-found');
-}
-if ($exportCount < 1) {
-    out('- export_validation=not-ready reason=no-export-enabled-backend-found');
-}
-if ($relationshipCount > 0 && $activeRelationshipCount < 1) {
-    out('- relationship_validation=not-ready reason=no-active-import-to-export-identity-relationship');
-}
-if ($stateStatsFound) {
-    out('- state_database=present reason=imported-state-statistics-discovered');
-} else {
-    out('- state_database=review reason=no-imported-state-statistics-discovered');
-}
-if ($reachableCount < count($summary)) {
-    out('- reachability=review reason=one-or-more-backends-did-not-respond-to-basic-probe');
-}
-if (count($summary) >= 2 && $importCount >= 1 && $exportCount >= 1 && $activeRelationshipCount >= 1) {
-    out('- sync_validation=ready-for-manual-watched-state-test');
-}
-
+out('Backend Configuration');
+table(['Backend', 'Type', 'Identity', 'Import', 'Export', 'Last Import', 'Last Export', 'Reach', 'Token'], $backendRows);
 out('');
-out('Possible Sync Topology');
-$edges = 0;
-foreach ($summary as $source) {
-    if (true !== $source['import']) { continue; }
-    foreach ($summary as $target) {
-        if ($source['label'] === $target['label']) { continue; }
-        if (true !== $target['export']) { continue; }
-        if ($source['user'] !== $target['user']) { continue; }
-        out(sprintf('- %s/%s -> %s/%s', $source['label'], $source['user'], $target['label'], $target['user']));
-        $edges++;
-    }
-}
-if (0 === $edges) {
-    out('- no same-identity import-to-export paths inferred from configured backends');
-}
-
+out('Identity Sync Relationships');
+out('Legend: > left syncs to right, < right syncs to left, <> bidirectional, x no active path');
+if (0 === count($relationshipRows)) { out('No same-identity relationships discovered.'); }
+else { table(['Left', 'Dir', 'Right', 'Reason'], $relationshipRows); }
+out('');
+out('Operational Statistics');
+out(sprintf('Database: %s   Tables: %d', $databaseStatus, $tableCount));
+if (0 < count($stateRows)) { table(['State Table', 'Total', 'Watched', 'Unwatched', 'Latest Update'], $stateRows); }
+else { out('No state-like table found.'); }
+if (0 < count($typeRows)) { out(''); out('State by Type'); table(['Type', 'Count'], $typeRows); }
+if (0 < count($stateBackendRows)) { out(''); out('State by Backend'); table(['Backend', 'Total', 'Watched', 'Latest'], $stateBackendRows); }
+out('');
+out('Readiness Summary');
+table(['Check', 'Value'], [
+    ['configured_backends', count($summary)],
+    ['reachable_backends', $reachableCount],
+    ['import_enabled', $importCount],
+    ['export_enabled', $exportCount],
+    ['identity_relationships', $relationshipCount],
+    ['active_identity_relationships', $activeRelationshipCount],
+    ['state_database', $stateStatsFound ? 'present' : 'review'],
+    ['sync_validation', (count($summary) >= 2 && $importCount >= 1 && $exportCount >= 1 && $activeRelationshipCount >= 1) ? 'ready-for-manual-test' : 'not-ready'],
+]);
 out('');
 out('Sanitization Map');
 if ($sanitize) {
-    foreach ($maps as $kind => $items) {
-        out('- ' . $kind . ': ' . count($items) . ' value(s) redacted');
-    }
-} else {
-    out('- disabled by --no-sanitize');
-}
+    if (0 === count($maps)) { out('No values required redaction.'); }
+    foreach ($maps as $kind => $items) { out(sprintf('- %s: %d value(s) redacted', $kind, count($items))); }
+} else { out('- disabled by --no-sanitize'); }
 PHP
 }
 
