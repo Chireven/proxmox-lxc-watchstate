@@ -73,10 +73,15 @@ This repository is public. Keep deployment-specific runtime data out of version 
 
 ## Phase 7 - Media Integration
 
-- [ ] Add Proxmox bind mounts after app is healthy.
-- [ ] Verify read-only/read-write requirements.
+- [x] Document Proxmox bind-mount model.
+- [x] Document media permissions model.
+- [x] Document read-only/read-write expectations.
+- [x] Document Plex/Jellyfin path mapping guidance.
 - [x] Validate Plex/Jellyfin connectivity.
+- [ ] Add Proxmox bind mounts after app is healthy.
+- [ ] Validate media read access from the `watchstate` service user.
 - [ ] Validate library scan behavior.
+- [ ] Snapshot validated Phase 7 media integration.
 
 ## Phase 8 - Operations
 
@@ -118,6 +123,8 @@ Rollback and uninstall notes are documented. The preferred rollback path is Prox
 
 The troubleshooting guide is documented. It covers service health, web/scheduler issues, Redis, permissions, Git ownership, update failures, frontend output, backup/restore issues, snapshot handling, locale warnings, and final verification.
 
+Phase 7 media integration documentation has started. The media guide documents Proxmox bind mounts, read-only defaults, shared media group permissions, Plex/Jellyfin path mapping, WatchState UI validation, and troubleshooting. Live bind-mount and library scan validation remain open.
+
 Current validated services:
 
 - `watchstate-web.service`
@@ -156,4 +163,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Choose the next workstream: final user-facing install documentation, media bind-mount validation, reverse proxy/TLS documentation, or production cutover checklist for CT 103.
+Validate Phase 7 media integration on CT 103 by adding Proxmox bind mounts, confirming media read access as the `watchstate` service user, validating library scan behavior, and snapshotting the completed media configuration.
