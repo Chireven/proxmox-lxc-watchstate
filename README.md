@@ -8,7 +8,7 @@ Native WatchState installation notes, scripts, and service definitions for runni
 - Host-side helper scripts for install, backup, update, and verification.
 - Native systemd service definitions for the WatchState web service and scheduler.
 - Rollback, uninstall, troubleshooting, and operational notes.
-- Media integration guidance for Proxmox bind mounts, permissions, and Plex/Jellyfin path mapping.
+- Media-backend integration guidance for API-based Plex/Jellyfin sync validation.
 
 ## Design goals
 
@@ -73,7 +73,7 @@ Back up:
 
 See [docs/INSTALL.md](docs/INSTALL.md) for the full validated install and operations workflow.
 
-See [docs/MEDIA.md](docs/MEDIA.md) for Phase 7 media integration guidance covering Proxmox bind mounts, permissions, read-only/read-write expectations, and Plex/Jellyfin path mapping.
+See [docs/MEDIA.md](docs/MEDIA.md) for Phase 7 media-backend integration guidance covering API connectivity, two-Plex watched-state sync validation, optional path matching, and why media bind mounts are not required by default.
 
 ## Validated runtime layout
 
@@ -119,4 +119,4 @@ The install, backup, update, and verification scripts have been validated agains
 
 ## Public repository safety
 
-Do not commit generated backup archives, copied runtime data, logs containing private data, API tokens, database files, private URLs, or host-specific configuration.
+Do not commit generated backup archives, copied runtime data, logs containing private data, database files, private URLs, or host-specific configuration.
