@@ -10,20 +10,22 @@ Install the native WatchState deployment into an existing Debian LXC from the Pr
 This script does not create the LXC. Start with a clean Debian CT, then run this script from the Proxmox host.
 
 Options:
-  --ctid <id>                 Proxmox CT ID. Overrides name discovery.
-  --name <name>               Proxmox CT name to discover. Default: watchstate
-  --branch <branch>           WatchState upstream branch. Default: master
-  --repo <url>                WatchState upstream repository. Default: https://github.com/arabcoders/watchstate.git
-  --frankenphp-url <url>      Download FrankenPHP binary from this URL if /opt/bin/frankenphp is missing
-  --uid <uid>                 watchstate service UID. Default: 1000
-  --gid <gid>                 watchstate service GID. Default: 1000
-  --skip-verify              Do not run verify-watchstate.sh after install
-  --force                    Allow install when /opt/app or /config already exists
-  -h, --help                 Show this help
+  --ctid <id>                       Proxmox CT ID. Overrides name discovery.
+  --name <name>                     Proxmox CT name to discover. Default: watchstate
+  --branch <branch>                 WatchState upstream branch. Default: master
+  --repo <url>                      WatchState upstream repository. Default: https://github.com/arabcoders/watchstate.git
+  --frankenphp-url <url>            Download a specific FrankenPHP binary URL instead of using the install script
+  --frankenphp-install-script <url> FrankenPHP installer URL. Default: https://frankenphp.dev/install.sh
+  --uid <uid>                       watchstate service UID. Default: 1000
+  --gid <gid>                       watchstate service GID. Default: 1000
+  --skip-verify                    Do not run verify-watchstate.sh after install
+  --force                          Allow install when /opt/app or /config already exists
+  -h, --help                       Show this help
 
 Examples:
+  ./scripts/install-watchstate.sh --ctid 103
+  ./scripts/install-watchstate.sh --name watchstate
   ./scripts/install-watchstate.sh --ctid 103 --frankenphp-url https://example.invalid/frankenphp-linux-x86_64
-  ./scripts/install-watchstate.sh --name watchstate --frankenphp-url https://example.invalid/frankenphp-linux-x86_64
 USAGE
 }
 
@@ -32,6 +34,7 @@ CT_NAME="watchstate"
 BRANCH="master"
 REPO_URL="https://github.com/arabcoders/watchstate.git"
 FRANKENPHP_URL=""
+FRANKENPHP_INSTALL_SCRIPT="https://frankenphp.dev/install.sh"
 WS_UID="1000"
 WS_GID="1000"
 SKIP_VERIFY="0"
@@ -59,6 +62,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --frankenphp-url)
       FRANKENPHP_URL="${2:-}"
+      shift 2
+      ;;
+    --frankenphp-install-script)
+      FRANKENPHP_INSTALL_SCRIPT="${2:-}"
       shift 2
       ;;
     --uid)
@@ -102,8 +109,8 @@ for value_name in WS_UID WS_GID; do
   fi
 done
 
-if [[ -z "${BRANCH}" || -z "${REPO_URL}" ]]; then
-  echo "ERROR: --branch and --repo cannot be empty." >&2
+if [[ -z "${BRANCH}" || -z "${REPO_URL}" || -z "${FRANKENPHP_INSTALL_SCRIPT}" ]]; then
+  echo "ERROR: --branch, --repo, and --frankenphp-install-script cannot be empty." >&2
   exit 2
 fi
 
@@ -243,17 +250,32 @@ fi
 echo "Installing or validating FrankenPHP."
 if run_ct test -x /opt/bin/frankenphp; then
   echo "FrankenPHP already exists at /opt/bin/frankenphp."
-else
-  if [[ -z "${FRANKENPHP_URL}" ]]; then
-    echo "ERROR: /opt/bin/frankenphp is missing and --frankenphp-url was not supplied." >&2
-    echo "Provide a validated FrankenPHP binary URL or install /opt/bin/frankenphp before running this script." >&2
-    exit 1
-  fi
-
+elif [[ -n "${FRANKENPHP_URL}" ]]; then
+  echo "Installing FrankenPHP from explicit binary URL."
   run_ct_sh "
 set -e
 curl -fsSL '${FRANKENPHP_URL}' -o /opt/bin/frankenphp
 chmod 0755 /opt/bin/frankenphp
+/opt/bin/frankenphp --version
+"
+else
+  echo "Installing FrankenPHP using official install script: ${FRANKENPHP_INSTALL_SCRIPT}"
+  run_ct_sh "
+set -e
+tmpdir=\$(mktemp -d)
+trap 'rm -rf \"\${tmpdir}\"' EXIT
+cd \"\${tmpdir}\"
+curl -fsSL '${FRANKENPHP_INSTALL_SCRIPT}' | sh
+
+if [ -x ./frankenphp ]; then
+  install -m 0755 ./frankenphp /opt/bin/frankenphp
+elif command -v frankenphp >/dev/null 2>&1; then
+  install -m 0755 \"\$(command -v frankenphp)\" /opt/bin/frankenphp
+else
+  echo 'ERROR: FrankenPHP installer completed but no frankenphp binary was found.' >&2
+  exit 1
+fi
+
 /opt/bin/frankenphp --version
 "
 fi
