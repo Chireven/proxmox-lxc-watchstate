@@ -78,11 +78,26 @@ Explicit examples:
 ./verify-watchstate.sh --ctid 103
 ./verify-watchstate.sh --ctid 103 --json
 ./verify-watchstate.sh --ctid 103 --no-color
+./verify-watchstate.sh --ctid 103 --support-bundle
 ```
 
 The script exits non-zero if any required check fails. Warnings do not fail the script but should be reviewed.
 
 The verifier checks host/container state, identity, paths, service health, runtime health, Git state, required tools, frontend output, database presence, and migration dry-run status. Output is color-coded when running in an interactive terminal.
+
+### Support bundle mode
+
+Support bundle mode adds sanitized backend diagnostics for troubleshooting WatchState media-backend sync.
+
+Run from the Proxmox host:
+
+```bash
+./verify-watchstate.sh --ctid 103 --support-bundle
+```
+
+The support bundle reads `/config/config/servers.yaml` inside the CT and reports backend type, placeholder labels, import/export state, last sync timestamps, basic reachability, and possible same-identity sync paths.
+
+Use `--no-sanitize` only for private local troubleshooting. Review all output before sharing it publicly.
 
 ## backup-watchstate.sh
 
