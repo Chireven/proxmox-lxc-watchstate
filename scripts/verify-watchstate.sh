@@ -400,6 +400,7 @@ declare(strict_types=1);
 $sanitize = getenv('WS_VERIFY_SANITIZE') !== '0';
 $serversFile = '/config/config/servers.yaml';
 $autoload = '/opt/app/vendor/autoload.php';
+$dbFile = '/config/db/watchstate_v02.db';
 
 function out(string $line = ''): void { echo $line . PHP_EOL; }
 function stamp(mixed $value): string {
@@ -464,6 +465,37 @@ function probe_backend(mixed $url, mixed $type): string {
     if (false === $result) { return 'failed'; }
     return 'ok';
 }
+function q(PDO $pdo, string $sql, array $params = []): mixed {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable) {
+        return null;
+    }
+}
+function table_columns(PDO $pdo, string $table): array {
+    $rows = q($pdo, 'PRAGMA table_info(' . quote_identifier($table) . ')');
+    if (!is_array($rows)) { return []; }
+    return array_map(static fn(array $row): string => (string) $row['name'], $rows);
+}
+function quote_identifier(string $identifier): string {
+    return '"' . str_replace('"', '""', $identifier) . '"';
+}
+function count_query(PDO $pdo, string $table, string $where = '', array $params = []): int {
+    $sql = 'SELECT COUNT(*) AS c FROM ' . quote_identifier($table) . ('' !== $where ? ' WHERE ' . $where : '');
+    $rows = q($pdo, $sql, $params);
+    if (!is_array($rows) || !isset($rows[0]['c'])) { return 0; }
+    return (int) $rows[0]['c'];
+}
+function max_timestamp(PDO $pdo, string $table, array $columns): string {
+    foreach (['updated_at', 'updated', 'created_at'] as $column) {
+        if (!in_array($column, $columns, true)) { continue; }
+        $rows = q($pdo, 'SELECT MAX(' . quote_identifier($column) . ') AS m FROM ' . quote_identifier($table));
+        if (is_array($rows) && isset($rows[0]['m'])) { return stamp($rows[0]['m']); }
+    }
+    return 'unknown';
+}
 
 out('Support bundle mode: ' . ($sanitize ? 'sanitized' : 'unsanitized'));
 out('Source: /config/config/servers.yaml');
@@ -501,12 +533,14 @@ $summary = [];
 $importCount = 0;
 $exportCount = 0;
 $reachableCount = 0;
+$rawToLabel = [];
 
 out('Backend Summary');
 foreach ($backends as $backend) {
     $name = (string) getv($backend, 'name', 'unknown');
     $type = (string) getv($backend, 'type', 'unknown');
     $label = backend_label($type, $name);
+    $rawToLabel[$name] = $label;
     $user = identity_label(getv($backend, 'user', 'unknown'));
     $url = safe_url(getv($backend, 'url', ''), $label);
     $importEnabled = filter_var(getv($backend, 'import.enabled', false), FILTER_VALIDATE_BOOLEAN);
@@ -518,6 +552,7 @@ foreach ($backends as $backend) {
     if ('ok' === $reachability) { $reachableCount++; }
 
     $summary[] = [
+        'raw_name' => $name,
         'label' => $label,
         'type' => $type,
         'user' => $user,
@@ -542,6 +577,56 @@ foreach ($backends as $backend) {
 }
 
 out('');
+out('Operational Statistics');
+$stateStatsFound = false;
+if (!file_exists($dbFile)) {
+    out('- database=missing path=/config/db/watchstate_v02.db');
+} else {
+    try {
+        $pdo = new PDO('sqlite:' . $dbFile);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $tables = q($pdo, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+        $tableNames = is_array($tables) ? array_map(static fn(array $row): string => (string) $row['name'], $tables) : [];
+        out('- database=present tables=' . count($tableNames));
+
+        foreach ($tableNames as $table) {
+            $columns = table_columns($pdo, $table);
+            $hasStateColumns = in_array('via', $columns, true) && in_array('watched', $columns, true) && in_array('type', $columns, true);
+            if (!$hasStateColumns) { continue; }
+
+            $stateStatsFound = true;
+            $total = count_query($pdo, $table);
+            $watched = count_query($pdo, $table, 'watched > 0');
+            $unwatched = count_query($pdo, $table, 'watched = 0 OR watched IS NULL');
+            $updated = max_timestamp($pdo, $table, $columns);
+            out(sprintf('- state_table=%s total=%d watched=%d unwatched=%d latest_update=%s', $table, $total, $watched, $unwatched, $updated));
+
+            $byType = q($pdo, 'SELECT type, COUNT(*) AS c FROM ' . quote_identifier($table) . ' GROUP BY type ORDER BY c DESC');
+            if (is_array($byType)) {
+                foreach ($byType as $row) {
+                    out(sprintf('  type=%s count=%d', (string) $row['type'], (int) $row['c']));
+                }
+            }
+
+            $byBackend = q($pdo, 'SELECT via, COUNT(*) AS total, SUM(CASE WHEN watched > 0 THEN 1 ELSE 0 END) AS watched, MAX(COALESCE(NULLIF(updated_at, 0), NULLIF(updated, 0), created_at)) AS latest FROM ' . quote_identifier($table) . ' GROUP BY via ORDER BY total DESC');
+            if (is_array($byBackend)) {
+                foreach ($byBackend as $row) {
+                    $rawVia = (string) ($row['via'] ?? 'unknown');
+                    $label = $rawToLabel[$rawVia] ?? placeholder('state-backend', $rawVia);
+                    out(sprintf('  backend=%s total=%d watched=%d latest=%s', $label, (int) $row['total'], (int) $row['watched'], stamp($row['latest'] ?? null)));
+                }
+            }
+        }
+
+        if (!$stateStatsFound) {
+            out('- state_stats=not-found reason=no-table-with-via-watched-type-columns-discovered');
+        }
+    } catch (Throwable $e) {
+        out('- database_stats=failed reason=' . $e->getMessage());
+    }
+}
+
+out('');
 out('Readiness Findings');
 out(sprintf('- configured_backends=%d import_enabled=%d export_enabled=%d reachable=%d', count($summary), $importCount, $exportCount, $reachableCount));
 if (count($summary) < 2) {
@@ -552,6 +637,11 @@ if ($importCount < 1) {
 }
 if ($exportCount < 1) {
     out('- export_validation=not-ready reason=no-export-enabled-backend-found');
+}
+if ($stateStatsFound) {
+    out('- state_database=present reason=imported-state-statistics-discovered');
+} else {
+    out('- state_database=review reason=no-imported-state-statistics-discovered');
 }
 if ($reachableCount < count($summary)) {
     out('- reachability=review reason=one-or-more-backends-did-not-respond-to-basic-probe');
