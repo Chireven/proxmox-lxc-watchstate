@@ -90,7 +90,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Produce verification script.
 - [x] Validate verification script.
 - [x] Produce update script.
-- [ ] Validate update script.
+- [x] Validate update script.
 - [ ] Write uninstall/rollback notes.
 - [ ] Write troubleshooting guide.
 - [ ] Produce install script.
@@ -109,7 +109,7 @@ The native update procedure is validated. Required corrections discovered during
 
 The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, and frontend output.
 
-The update script is produced from the validated Phase 9 procedure. It still needs a live validation run before being marked complete.
+The update script is produced and validated. It successfully performed CT name discovery, pre-update backup, retention check, Proxmox snapshot creation, source/dependency/frontend update steps, migration check, service restart, healthcheck validation, and post-update verification with 0 warnings and 0 failures.
 
 Current validated services:
 
@@ -149,4 +149,4 @@ watchstate-pre-update-validation
 
 ## Current Next Step
 
-Validate `scripts/update-watchstate.sh` during a maintenance window, then choose the next workstream: uninstall/rollback notes, troubleshooting guide, reverse proxy/TLS, install script, or final install documentation.
+Choose the next workstream: uninstall/rollback notes, troubleshooting guide, reverse proxy/TLS, install script, or final install documentation.
