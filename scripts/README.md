@@ -55,17 +55,6 @@ The script refuses to prune directly under broad system paths such as `/`, `/roo
 
 The script has been validated against the native WatchState LXC deployment. A successful run should report all services active and the WatchState healthcheck should return healthy.
 
-Expected successful service/healthcheck result:
-
-```text
-active
-active
-active
-{"status":"ok","message":"System is healthy"}
-```
-
-The generated archives were also validated by restoring them into a clean scratch CT and confirming Redis, the WatchState web service, the scheduler service, and the API healthcheck returned healthy.
-
 ## verify-watchstate.sh
 
 Verifies the native WatchState LXC deployment from the Proxmox host.
@@ -86,24 +75,6 @@ Explicit examples:
 ./scripts/verify-watchstate.sh --ctid 103
 ```
 
-The verification script checks:
-
-```text
-container status
-service user/group
-required paths
-systemd enabled/active state
-FrankenPHP version
-Redis PONG
-WatchState healthcheck
-Git branch/remote/status
-required tools
-Composer platform requirements
-WatchState database presence
-migration dry-run status
-frontend output presence
-```
-
 The script exits non-zero if any required check fails. Warnings do not fail the script but should be reviewed.
 
 ## update-watchstate.sh
@@ -119,22 +90,7 @@ chmod +x scripts/update-watchstate.sh
 
 If no CT ID is supplied, the script looks for a Proxmox CT named `watchstate`.
 
-Default behavior:
-
-```text
-runs backup-watchstate.sh first
-creates a Proxmox snapshot
-stops WatchState web/scheduler services
-fast-forwards origin/master
-runs Composer install
-runs Bun install
-regenerates frontend output
-syncs frontend/exported to public/exported
-executes database migrations
-runs database index/cache maintenance
-restarts services
-runs verify-watchstate.sh
-```
+The update script runs a backup, creates a snapshot, updates source/dependencies/frontend/database state, restarts services, and runs verification.
 
 Common options:
 
@@ -148,6 +104,49 @@ Common options:
 ./scripts/update-watchstate.sh --skip-verify
 ```
 
-The update script is based on the validated Phase 9 update procedure. Test it during a maintenance window before treating it as production automation.
+## install-watchstate.sh
+
+Installs the native WatchState deployment into an existing Debian LXC from the Proxmox host.
+
+This script does not create the LXC. Start with a clean Debian CT, then run the script from the Proxmox host.
+
+The install script requires either an existing executable `/opt/bin/frankenphp` in the CT or an explicit `--frankenphp-url` argument. This avoids silently installing an unvalidated runtime binary.
+
+Example:
+
+```bash
+chmod +x scripts/install-watchstate.sh
+./scripts/install-watchstate.sh --ctid 103 --frankenphp-url '<validated-frankenphp-binary-url>'
+```
+
+Common options:
+
+```bash
+./scripts/install-watchstate.sh --name watchstate --frankenphp-url '<validated-frankenphp-binary-url>'
+./scripts/install-watchstate.sh --ctid 103 --frankenphp-url '<validated-frankenphp-binary-url>'
+./scripts/install-watchstate.sh --branch master
+./scripts/install-watchstate.sh --skip-verify
+./scripts/install-watchstate.sh --force
+```
+
+Default behavior:
+
+```text
+installs Debian package prerequisites
+creates watchstate UID/GID 1000
+creates /config and /opt/bin
+installs Bun if missing
+installs or validates /opt/bin/frankenphp
+clones WatchState into /opt/app
+runs Composer install
+runs Bun install
+generates and syncs frontend output
+runs initial WatchState console/database initialization
+installs systemd service units
+starts Redis, web, and scheduler services
+runs verify-watchstate.sh
+```
+
+The install script is newly produced and still needs validation in a clean scratch CT before being considered complete.
 
 Do not commit generated backup archives or copied runtime data to this repository.
