@@ -2,21 +2,102 @@
 
 Native WatchState installation notes, scripts, and service definitions for running WatchState directly inside a Proxmox LXC container without Docker.
 
-## Project Goals
+## What this repo provides
 
-- Build a clean native WatchState deployment for Debian-based Proxmox LXC containers.
-- Use the upstream Docker image and documentation as a reference, not as the runtime.
-- Document every dependency and configuration decision.
-- Produce repeatable install, update, validation, backup, and troubleshooting workflows.
-- Keep the deployment understandable and maintainable for Proxmox administrators.
+- A validated native WatchState install workflow for Debian-based Proxmox LXC containers.
+- Host-side helper scripts for install, backup, update, and verification.
+- Native systemd service definitions for the WatchState web service and scheduler.
+- Rollback, uninstall, troubleshooting, and operational notes.
 
-## Current Status
+## Design goals
 
-This repository is in the project foundation stage. The first milestones are to document the target architecture and reverse-engineer the upstream WatchState container before installing anything.
+- Keep Docker out of the runtime path.
+- Run helper scripts from the Proxmox host.
+- Avoid requiring Git or build tools on the Proxmox host.
+- Install build/runtime tools inside the target LXC only.
+- Keep persistent WatchState state under `/config`.
+- Keep WatchState source under `/opt/app`.
+- Keep FrankenPHP under `/opt/bin/frankenphp`.
 
-See [PROJECT.md](PROJECT.md) for the current roadmap.
+## Quick start
 
-## Repository Layout
+Create a clean Debian LXC container, then run these commands on the Proxmox host:
+
+```bash
+mkdir -p /scripts/watchstate
+cd /scripts/watchstate
+
+curl -fsSL \
+  https://raw.githubusercontent.com/Chireven/proxmox-lxc-watchstate/main/scripts/install-watchstate.sh \
+  -o install-watchstate.sh
+
+curl -fsSL \
+  https://raw.githubusercontent.com/Chireven/proxmox-lxc-watchstate/main/scripts/verify-watchstate.sh \
+  -o verify-watchstate.sh
+
+curl -fsSL \
+  https://raw.githubusercontent.com/Chireven/proxmox-lxc-watchstate/main/scripts/update-watchstate.sh \
+  -o update-watchstate.sh
+
+curl -fsSL \
+  https://raw.githubusercontent.com/Chireven/proxmox-lxc-watchstate/main/scripts/backup-watchstate.sh \
+  -o backup-watchstate.sh
+
+chmod 0755 *.sh
+```
+
+Install into an existing running CT:
+
+```bash
+./install-watchstate.sh --ctid 104
+```
+
+Verify:
+
+```bash
+./verify-watchstate.sh --ctid 104
+```
+
+Update later:
+
+```bash
+./update-watchstate.sh --ctid 104
+```
+
+Back up:
+
+```bash
+./backup-watchstate.sh --ctid 104
+```
+
+See [docs/INSTALL.md](docs/INSTALL.md) for the full validated install and operations workflow.
+
+## Validated runtime layout
+
+Inside the WatchState CT:
+
+```text
+/opt/app              WatchState source tree
+/config               Persistent WatchState config and data
+/opt/bin/frankenphp   FrankenPHP static binary
+/usr/local/bin/bun    Bun frontend tool
+```
+
+Native services:
+
+```text
+redis-server.service
+watchstate-web.service
+watchstate-scheduler.service
+```
+
+Healthcheck:
+
+```text
+http://127.0.0.1:8080/v1/api/system/healthcheck
+```
+
+## Repository layout
 
 ```text
 .
@@ -24,11 +105,15 @@ See [PROJECT.md](PROJECT.md) for the current roadmap.
 ├── examples/   Sample configuration files and templates
 ├── notes/      Project journal and working notes
 ├── research/   Upstream WatchState analysis
-├── scripts/    Installer, updater, and verification scripts
+├── scripts/    Installer, updater, backup, and verification scripts
 ├── systemd/    Native service definitions
 └── tests/      Manual and automated validation notes
 ```
 
-## Guiding Principle
+## Project status
 
-Nothing gets installed until we understand why it is required.
+The install, backup, update, and verification scripts have been validated against a native WatchState LXC deployment. See [PROJECT.md](PROJECT.md) for project history and remaining optional workstreams.
+
+## Public repository safety
+
+Do not commit generated backup archives, copied runtime data, logs containing private data, API tokens, database files, private URLs, or host-specific configuration.
