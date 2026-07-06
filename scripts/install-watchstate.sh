@@ -48,65 +48,34 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 SERVICE_TEMPLATE_DIR=""
 
+require_arg() {
+  local opt="$1"
+  local value="${2:-}"
+  if [[ -z "${value}" || "${value}" == --* ]]; then
+    echo "ERROR: ${opt} requires a value." >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --ctid)
-      CTID="${2:-}"
-      shift 2
-      ;;
-    --name)
-      CT_NAME="${2:-}"
-      shift 2
-      ;;
-    -y|--yes)
-      ASSUME_YES="1"
-      shift
-      ;;
-    --branch)
-      BRANCH="${2:-}"
-      shift 2
-      ;;
-    --repo)
-      REPO_URL="${2:-}"
-      shift 2
-      ;;
-    --frankenphp-url)
-      FRANKENPHP_URL="${2:-}"
-      shift 2
-      ;;
-    --source)
-      SOURCE_PATH="${2:-}"
-      shift 2
-      ;;
+    --ctid) require_arg "$1" "${2:-}"; CTID="$2"; shift 2 ;;
+    --name) require_arg "$1" "${2:-}"; CT_NAME="$2"; shift 2 ;;
+    -y|--yes) ASSUME_YES="1"; shift ;;
+    --branch) require_arg "$1" "${2:-}"; BRANCH="$2"; shift 2 ;;
+    --repo) require_arg "$1" "${2:-}"; REPO_URL="$2"; shift 2 ;;
+    --frankenphp-url) require_arg "$1" "${2:-}"; FRANKENPHP_URL="$2"; shift 2 ;;
+    --source) require_arg "$1" "${2:-}"; SOURCE_PATH="$2"; shift 2 ;;
     --frankenphp-install-script)
       echo "ERROR: --frankenphp-install-script has been removed. Use --frankenphp-url to pin a direct binary URL." >&2
       exit 2
       ;;
-    --uid)
-      WS_UID="${2:-}"
-      shift 2
-      ;;
-    --gid)
-      WS_GID="${2:-}"
-      shift 2
-      ;;
-    --skip-verify)
-      SKIP_VERIFY="1"
-      shift
-      ;;
-    --force)
-      FORCE="1"
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "ERROR: Unknown argument: $1" >&2
-      usage >&2
-      exit 2
-      ;;
+    --uid) require_arg "$1" "${2:-}"; WS_UID="$2"; shift 2 ;;
+    --gid) require_arg "$1" "${2:-}"; WS_GID="$2"; shift 2 ;;
+    --skip-verify) SKIP_VERIFY="1"; shift ;;
+    --force) FORCE="1"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "ERROR: Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
@@ -115,9 +84,9 @@ if [[ -z "${CT_NAME}" && -z "${CTID}" ]]; then
   exit 2
 fi
 
-for value_name in WS_UID WS_GID; do
+for value_name in CTID WS_UID WS_GID; do
   value="${!value_name}"
-  if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
+  if [[ -n "${value}" && ! "${value}" =~ ^[0-9]+$ ]]; then
     echo "ERROR: ${value_name} must be a numeric ID." >&2
     exit 2
   fi
@@ -127,7 +96,6 @@ if [[ -z "${SOURCE_PATH}" && ( -z "${BRANCH}" || -z "${REPO_URL}" ) ]]; then
   echo "ERROR: --branch and --repo cannot be empty when --source is not supplied." >&2
   exit 2
 fi
-
 
 confirm_discovered_ctid() {
   if [[ "${ASSUME_YES}" == "1" ]]; then
@@ -149,6 +117,7 @@ confirm_discovered_ctid() {
     exit 1
   fi
 }
+
 resolve_ctid() {
   if [[ -n "${CTID}" ]]; then
     return
@@ -205,17 +174,26 @@ validate_source_path() {
   fi
 
   case "${SOURCE_PATH,,}" in
-    *.zip)
-      SOURCE_KIND="zip"
-      ;;
-    *.tgz|*.tar.gz)
-      SOURCE_KIND="tgz"
-      ;;
+    *.zip) SOURCE_KIND="zip" ;;
+    *.tgz|*.tar.gz) SOURCE_KIND="tgz" ;;
     *)
       echo "ERROR: --source must be a directory, .zip, .tgz, or .tar.gz file." >&2
       exit 2
       ;;
   esac
+}
+
+normalize_app_source() {
+  run_ct_sh '
+set -e
+if [ -d /opt/app ]; then
+  find /opt/app -type f \( -name "*.php" -o -name "*.sh" -o -name "console" \) -exec sed -i "s/\r$//" {} +
+  if [ -f /opt/app/bin/console ]; then
+    chmod 0755 /opt/app/bin/console
+  fi
+  chown -R watchstate:watchstate /opt/app
+fi
+'
 }
 
 install_local_source() {
@@ -226,7 +204,11 @@ install_local_source() {
 
   if [[ "${SOURCE_KIND}" == "directory" ]]; then
     host_archive="$(mktemp --suffix=.tgz)"
-    if ! tar -C "${SOURCE_PATH}" -czf "${host_archive}" .; then
+    if ! tar -C "${SOURCE_PATH}" \
+      --exclude='./.git' \
+      --exclude='./vendor' \
+      --exclude='./node_modules' \
+      -czf "${host_archive}" .; then
       rm -f "${host_archive}"
       return 1
     fi
@@ -277,6 +259,8 @@ EOF
 chown -R watchstate:watchstate /opt/app
 rm -rf /tmp/watchstate-source '${remote_archive}'
 "
+
+  normalize_app_source
 }
 
 validate_source_path
@@ -285,6 +269,7 @@ if ! command -v pct >/dev/null 2>&1; then
   echo "ERROR: pct was not found. Run this script on the Proxmox host." >&2
   exit 1
 fi
+
 find_service_template_dir() {
   local candidate
   for candidate in "${REPO_ROOT}/systemd" "${SCRIPT_DIR}/systemd" "$(pwd)/systemd"; do
@@ -458,7 +443,10 @@ if run_ct test -x /usr/local/bin/bun; then
 else
   run_ct_sh "
 set -e
-curl -fsSL https://bun.sh/install | bash
+bun_installer=\$(mktemp)
+trap 'rm -f \"\${bun_installer}\"' EXIT
+curl -fsSL https://bun.sh/install -o \"\${bun_installer}\"
+bash \"\${bun_installer}\"
 install -m 0755 /root/.bun/bin/bun /usr/local/bin/bun
 /usr/local/bin/bun --version
 "
@@ -504,6 +492,7 @@ else
     run_ct runuser -u watchstate -- git clone --branch "${BRANCH}" "${REPO_URL}" /opt/app
   fi
   run_ct rm -f /opt/app/.watchstate-source >/dev/null 2>&1 || true
+  normalize_app_source
 fi
 
 run_ct chown -R watchstate:watchstate /opt/app /config
