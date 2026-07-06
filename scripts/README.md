@@ -20,19 +20,23 @@ The install script can run from either the full repository layout or from a copi
 
 By default, the script downloads the latest FrankenPHP static binary for the CT architecture and installs it to `/opt/bin/frankenphp`.
 
+By default, WatchState source is cloned from upstream GitHub. Use `--source <path>` to install from a host-side source directory, `.zip`, `.tgz`, or `.tar.gz` instead. This is useful for testing local WatchState changes before submitting them upstream.
 Run from the Proxmox host:
 
 ```bash
 chmod +x install-watchstate.sh verify-watchstate.sh
-./install-watchstate.sh --ctid 103
+./install-watchstate.sh --ctid <ctid>
 ```
 
 Common options:
 
 ```bash
 ./install-watchstate.sh --name watchstate
-./install-watchstate.sh --ctid 103
+./install-watchstate.sh --ctid <ctid>
 ./install-watchstate.sh --branch master
+./install-watchstate.sh --source /root/watchstate-source
+./install-watchstate.sh --source /root/watchstate-source.zip
+./install-watchstate.sh --source /root/watchstate-source.tgz
 ./install-watchstate.sh --frankenphp-url '<validated-frankenphp-binary-url>'
 ./install-watchstate.sh --skip-verify
 ./install-watchstate.sh --force
@@ -40,6 +44,7 @@ Common options:
 
 Use `--frankenphp-url` only when pinning a specific validated FrankenPHP binary. Otherwise, the default latest static binary path is simpler.
 
+When `--source` points to a directory, the directory contents are archived on the host, pushed into the CT, and installed into `/opt/app`. When `--source` points to `.zip`, `.tgz`, or `.tar.gz`, the archive is pushed into the CT and extracted. Archives may contain WatchState files directly or inside one top-level directory; the extracted source must contain `composer.json` at the detected source root.
 Default behavior:
 
 ```text
@@ -48,7 +53,7 @@ creates watchstate UID/GID 1000
 creates /config, /opt/app, and /opt/bin
 installs Bun to /usr/local/bin/bun if missing
 installs or validates /opt/bin/frankenphp
-clones WatchState into /opt/app
+clones WatchState into /opt/app, or installs local --source content into /opt/app
 runs Composer install
 runs Bun install
 generates and syncs frontend output
@@ -75,10 +80,10 @@ Explicit examples:
 
 ```bash
 ./verify-watchstate.sh --name watchstate
-./verify-watchstate.sh --ctid 103
-./verify-watchstate.sh --ctid 103 --json
-./verify-watchstate.sh --ctid 103 --no-color
-./verify-watchstate.sh --ctid 103 --support-bundle
+./verify-watchstate.sh --ctid <ctid>
+./verify-watchstate.sh --ctid <ctid> --json
+./verify-watchstate.sh --ctid <ctid> --no-color
+./verify-watchstate.sh --ctid <ctid> --support-bundle
 ```
 
 The script exits non-zero if any required check fails. Warnings do not fail the script but should be reviewed.
@@ -92,7 +97,7 @@ Support bundle mode adds sanitized backend diagnostics for troubleshooting Watch
 Run from the Proxmox host:
 
 ```bash
-./verify-watchstate.sh --ctid 103 --support-bundle
+./verify-watchstate.sh --ctid <ctid> --support-bundle
 ```
 
 The support bundle reads `/config/config/servers.yaml` inside the CT and reports backend type, placeholder labels, import/export state, last sync timestamps, basic reachability, and possible same-identity sync paths.
@@ -125,7 +130,7 @@ Common options:
 
 ```bash
 ./backup-watchstate.sh --name watchstate
-./backup-watchstate.sh --ctid 103 --backup-root /mnt/backups/watchstate
+./backup-watchstate.sh --ctid <ctid> --backup-root /mnt/backups/watchstate
 ./backup-watchstate.sh --no-app
 ./backup-watchstate.sh --keep-tmp
 ```
@@ -167,12 +172,17 @@ If no CT ID is supplied, the script looks for a Proxmox CT named `watchstate`.
 
 The update script runs a backup, creates a snapshot, updates source/dependencies/frontend/database state, restarts services, validates service health, and runs verification.
 
+By default, updates fast-forward the existing Git checkout from upstream. Use `--source <path>` to replace `/opt/app` from a host-side source directory, `.zip`, `.tgz`, or `.tar.gz` instead of running Git fetch/pull. This keeps `/config` intact while letting you test local WatchState source changes in the LXC.
+
 Common options:
 
 ```bash
 ./update-watchstate.sh --name watchstate
-./update-watchstate.sh --ctid 103
+./update-watchstate.sh --ctid <ctid>
 ./update-watchstate.sh --branch master
+./update-watchstate.sh --source /root/watchstate-source
+./update-watchstate.sh --source /root/watchstate-source.zip
+./update-watchstate.sh --source /root/watchstate-source.tgz
 ./update-watchstate.sh --backup-root /mnt/backups/watchstate
 ./update-watchstate.sh --skip-snapshot
 ./update-watchstate.sh --skip-backup
@@ -185,4 +195,5 @@ Common options:
 - Non-login `pct exec ... sh -c` sessions may not include `/usr/local/bin` in `PATH`.
 - The validated scripts either call `/usr/local/bin/bun` directly or export a PATH containing `/usr/local/bin` before running Composer scripts that invoke `bun` by name.
 - FrankenPHP is installed at `/opt/bin/frankenphp`.
+- Local source installs write `/opt/app/.watchstate-source` so verification can distinguish archive/directory deployments from Git checkouts.
 - Do not commit generated backup archives, copied runtime data, logs, database files, private URLs, or host-specific configuration.

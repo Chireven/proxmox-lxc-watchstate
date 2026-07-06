@@ -10,6 +10,7 @@ Create an application-level backup of the native WatchState LXC deployment.
 Options:
   --ctid <id>           Proxmox CT ID. Overrides name discovery.
   --name <name>         Proxmox CT name to discover. Default: watchstate
+  -y, --yes            Confirm auto-discovered CT without prompting
   --backup-root <path>  Host-side backup root. Default: /root/watchstate-backups
   --keep <count>        Keep latest backup directories. Default: 14. Use 0 to disable pruning.
   --list                List matching backup directories and exit
@@ -25,13 +26,14 @@ Examples:
   ./scripts/backup-watchstate.sh --keep 30
   ./scripts/backup-watchstate.sh --prune-only --prune-dry-run
   ./scripts/backup-watchstate.sh --name watchstate
-  ./scripts/backup-watchstate.sh --ctid 103 --backup-root /mnt/backups/watchstate
+  ./scripts/backup-watchstate.sh --ctid <ctid> --backup-root /mnt/backups/watchstate
   ./scripts/backup-watchstate.sh --no-app
 USAGE
 }
 
 CTID=""
 CT_NAME="watchstate"
+ASSUME_YES="0"
 BACKUP_ROOT="/root/watchstate-backups"
 KEEP_BACKUPS="14"
 LIST_ONLY="0"
@@ -50,6 +52,10 @@ while [[ $# -gt 0 ]]; do
     --name)
       CT_NAME="${2:-}"
       shift 2
+      ;;
+    -y|--yes)
+      ASSUME_YES="1"
+      shift
       ;;
     --backup-root)
       BACKUP_ROOT="${2:-}"
@@ -228,6 +234,26 @@ if ! command -v pct >/dev/null 2>&1; then
   exit 1
 fi
 
+confirm_discovered_ctid() {
+  if [[ "${ASSUME_YES}" == "1" ]]; then
+    echo "Auto-confirmed discovered CT '${CT_NAME}' as CTID ${CTID}."
+    return
+  fi
+
+  if [[ ! -t 0 ]]; then
+    echo "ERROR: CT '${CT_NAME}' was discovered as CTID ${CTID}, but confirmation requires an interactive terminal." >&2
+    echo "Pass --ctid ${CTID} to target it explicitly, or pass --yes to confirm name discovery for automation." >&2
+    exit 1
+  fi
+
+  local answer
+  printf "Discovered CT '%s' as CTID %s. Type 'yes' to continue: " "${CT_NAME}" "${CTID}" >&2
+  read -r answer
+  if [[ "${answer}" != "yes" ]]; then
+    echo "Aborted. Pass --ctid ${CTID} to target this container explicitly." >&2
+    exit 1
+  fi
+}
 resolve_ctid() {
   if [[ -n "${CTID}" ]]; then
     return
@@ -249,7 +275,7 @@ resolve_ctid() {
   fi
 
   CTID="${matches}"
-  echo "Discovered CT '${CT_NAME}' as CTID ${CTID}."
+  confirm_discovered_ctid
 }
 
 resolve_ctid

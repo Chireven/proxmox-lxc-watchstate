@@ -10,6 +10,7 @@ Verify the native WatchState LXC deployment from the Proxmox host.
 Options:
   --ctid <id>            Proxmox CT ID. Overrides name discovery.
   --name <name>          Proxmox CT name to discover. Default: watchstate
+  -y, --yes             Confirm auto-discovered CT without prompting
   --json                 Emit a compact JSON-like summary at the end
   --support-bundle       Include sanitized backend diagnostics for public support
   --backend-diagnostics  Alias for --support-bundle
@@ -20,13 +21,14 @@ Options:
 Examples:
   ./scripts/verify-watchstate.sh
   ./scripts/verify-watchstate.sh --name watchstate
-  ./scripts/verify-watchstate.sh --ctid 103
-  ./scripts/verify-watchstate.sh --ctid 103 --support-bundle
+  ./scripts/verify-watchstate.sh --ctid <ctid>
+  ./scripts/verify-watchstate.sh --ctid <ctid> --support-bundle
 USAGE
 }
 
 CTID=""
 CT_NAME="watchstate"
+ASSUME_YES="0"
 EMIT_JSON="0"
 NO_COLOR_OUTPUT="0"
 SUPPORT_BUNDLE="0"
@@ -44,6 +46,10 @@ while [[ $# -gt 0 ]]; do
     --name)
       CT_NAME="${2:-}"
       shift 2
+      ;;
+    -y|--yes)
+      ASSUME_YES="1"
+      shift
       ;;
     --json)
       EMIT_JSON="1"
@@ -134,6 +140,26 @@ section() {
   printf '%b\n' "${BOLD}${BLUE}== $* ==${RESET}"
 }
 
+confirm_discovered_ctid() {
+  if [[ "${ASSUME_YES}" == "1" ]]; then
+    echo "Auto-confirmed discovered CT '${CT_NAME}' as CTID ${CTID}."
+    return
+  fi
+
+  if [[ ! -t 0 ]]; then
+    echo "ERROR: CT '${CT_NAME}' was discovered as CTID ${CTID}, but confirmation requires an interactive terminal." >&2
+    echo "Pass --ctid ${CTID} to target it explicitly, or pass --yes to confirm name discovery for automation." >&2
+    exit 1
+  fi
+
+  local answer
+  printf "Discovered CT '%s' as CTID %s. Type 'yes' to continue: " "${CT_NAME}" "${CTID}" >&2
+  read -r answer
+  if [[ "${answer}" != "yes" ]]; then
+    echo "Aborted. Pass --ctid ${CTID} to target this container explicitly." >&2
+    exit 1
+  fi
+}
 resolve_ctid() {
   if [[ -n "${CTID}" ]]; then
     return
@@ -155,7 +181,7 @@ resolve_ctid() {
   fi
 
   CTID="${matches}"
-  info "Discovered CT '${CT_NAME}' as CTID ${CTID}."
+  confirm_discovered_ctid
 }
 
 run_ct() {
@@ -288,41 +314,48 @@ check_runtime() {
 check_app_state() {
   section "Application state checks"
 
+  local is_git="0"
   if run_ct_sh 'cd /opt/app && runuser -u watchstate -- git rev-parse --is-inside-work-tree' | grep -qx 'true'; then
     pass "/opt/app is a Git work tree"
+    is_git="1"
+  elif run_ct test -f /opt/app/.watchstate-source; then
+    pass "/opt/app has local source metadata"
+    info "$(run_ct cat /opt/app/.watchstate-source 2>/dev/null | tr '\n' '; ' || true)"
   else
-    fail "/opt/app is not a valid Git work tree for watchstate"
+    fail "/opt/app is not a Git work tree and has no local source metadata"
   fi
 
-  local branch commit remote status
-  branch="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git branch --show-current' 2>/dev/null || true)"
-  commit="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git rev-parse HEAD' 2>/dev/null || true)"
-  remote="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git remote get-url origin' 2>/dev/null || true)"
-  status="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git status --short' 2>/dev/null || true)"
+  if [[ "${is_git}" == "1" ]]; then
+    local branch commit remote status
+    branch="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git branch --show-current' 2>/dev/null || true)"
+    commit="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git rev-parse HEAD' 2>/dev/null || true)"
+    remote="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git remote get-url origin' 2>/dev/null || true)"
+    status="$(run_ct_sh 'cd /opt/app && runuser -u watchstate -- git status --short' 2>/dev/null || true)"
 
-  info "branch: ${branch:-unknown}"
-  info "commit: ${commit:-unknown}"
-  info "origin: ${remote:-unknown}"
+    info "branch: ${branch:-unknown}"
+    info "commit: ${commit:-unknown}"
+    info "origin: ${remote:-unknown}"
 
-  if [[ "${branch}" == "master" ]]; then
-    pass "Git branch is master"
-  else
-    warn "Git branch is ${branch:-unknown}, expected master"
-  fi
+    if [[ "${branch}" == "master" ]]; then
+      pass "Git branch is master"
+    else
+      warn "Git branch is ${branch:-unknown}, expected master"
+    fi
 
-  if [[ "${remote}" == "https://github.com/arabcoders/watchstate.git" ]]; then
-    pass "Git origin matches upstream WatchState"
-  else
-    warn "Git origin is ${remote:-unknown}"
-  fi
+    if [[ "${remote}" == "https://github.com/arabcoders/watchstate.git" ]]; then
+      pass "Git origin matches upstream WatchState"
+    else
+      warn "Git origin is ${remote:-unknown}"
+    fi
 
-  local unexpected_status
-  unexpected_status="$(printf '%s\n' "${status}" | grep -v '^?? public/exported/$' || true)"
-  if [[ -z "${unexpected_status}" ]]; then
-    pass "Git status is clean except expected generated public/exported output"
-  else
-    warn "Git status contains unexpected entries:"
-    printf '%s\n' "${unexpected_status}"
+    local unexpected_status
+    unexpected_status="$(printf '%s\n' "${status}" | grep -v '^?? public/exported/$' | grep -v '^?? .watchstate-source$' || true)"
+    if [[ -z "${unexpected_status}" ]]; then
+      pass "Git status is clean except expected generated/local-source metadata output"
+    else
+      warn "Git status contains unexpected entries:"
+      printf '%s\n' "${unexpected_status}"
+    fi
   fi
 
   local exported_size

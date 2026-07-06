@@ -12,8 +12,10 @@ This script does not create the LXC. Start with a clean Debian CT, then run this
 Options:
   --ctid <id>                       Proxmox CT ID. Overrides name discovery.
   --name <name>                     Proxmox CT name to discover. Default: watchstate
+  -y, --yes                        Confirm auto-discovered CT without prompting
   --branch <branch>                 WatchState upstream branch. Default: master
   --repo <url>                      WatchState upstream repository. Default: https://github.com/arabcoders/watchstate.git
+  --source <path>                   Host path to a WatchState source directory, .zip, .tgz, or .tar.gz. Overrides --repo/--branch.
   --frankenphp-url <url>            Download a specific FrankenPHP binary URL. Default: latest static binary for CT architecture
   --uid <uid>                       watchstate service UID. Default: 1000
   --gid <gid>                       watchstate service GID. Default: 1000
@@ -22,17 +24,22 @@ Options:
   -h, --help                       Show this help
 
 Examples:
-  ./scripts/install-watchstate.sh --ctid 103
+  ./scripts/install-watchstate.sh --ctid <ctid>
   ./scripts/install-watchstate.sh --name watchstate
-  ./scripts/install-watchstate.sh --ctid 103 --frankenphp-url https://github.com/php/frankenphp/releases/latest/download/frankenphp-linux-x86_64
+  ./scripts/install-watchstate.sh --ctid <ctid> --source /root/watchstate-source
+  ./scripts/install-watchstate.sh --ctid <ctid> --source /root/watchstate-source.tgz
+  ./scripts/install-watchstate.sh --ctid <ctid> --frankenphp-url https://github.com/php/frankenphp/releases/latest/download/frankenphp-linux-x86_64
 USAGE
 }
 
 CTID=""
 CT_NAME="watchstate"
+ASSUME_YES="0"
 BRANCH="master"
 REPO_URL="https://github.com/arabcoders/watchstate.git"
 FRANKENPHP_URL=""
+SOURCE_PATH=""
+SOURCE_KIND=""
 WS_UID="1000"
 WS_GID="1000"
 SKIP_VERIFY="0"
@@ -51,6 +58,10 @@ while [[ $# -gt 0 ]]; do
       CT_NAME="${2:-}"
       shift 2
       ;;
+    -y|--yes)
+      ASSUME_YES="1"
+      shift
+      ;;
     --branch)
       BRANCH="${2:-}"
       shift 2
@@ -61,6 +72,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --frankenphp-url)
       FRANKENPHP_URL="${2:-}"
+      shift 2
+      ;;
+    --source)
+      SOURCE_PATH="${2:-}"
       shift 2
       ;;
     --frankenphp-install-script)
@@ -108,16 +123,32 @@ for value_name in WS_UID WS_GID; do
   fi
 done
 
-if [[ -z "${BRANCH}" || -z "${REPO_URL}" ]]; then
-  echo "ERROR: --branch and --repo cannot be empty." >&2
+if [[ -z "${SOURCE_PATH}" && ( -z "${BRANCH}" || -z "${REPO_URL}" ) ]]; then
+  echo "ERROR: --branch and --repo cannot be empty when --source is not supplied." >&2
   exit 2
 fi
 
-if ! command -v pct >/dev/null 2>&1; then
-  echo "ERROR: pct was not found. Run this script on the Proxmox host." >&2
-  exit 1
-fi
 
+confirm_discovered_ctid() {
+  if [[ "${ASSUME_YES}" == "1" ]]; then
+    echo "Auto-confirmed discovered CT '${CT_NAME}' as CTID ${CTID}."
+    return
+  fi
+
+  if [[ ! -t 0 ]]; then
+    echo "ERROR: CT '${CT_NAME}' was discovered as CTID ${CTID}, but confirmation requires an interactive terminal." >&2
+    echo "Pass --ctid ${CTID} to target it explicitly, or pass --yes to confirm name discovery for automation." >&2
+    exit 1
+  fi
+
+  local answer
+  printf "Discovered CT '%s' as CTID %s. Type 'yes' to continue: " "${CT_NAME}" "${CTID}" >&2
+  read -r answer
+  if [[ "${answer}" != "yes" ]]; then
+    echo "Aborted. Pass --ctid ${CTID} to target this container explicitly." >&2
+    exit 1
+  fi
+}
 resolve_ctid() {
   if [[ -n "${CTID}" ]]; then
     return
@@ -139,7 +170,7 @@ resolve_ctid() {
   fi
 
   CTID="${matches}"
-  echo "Discovered CT '${CT_NAME}' as CTID ${CTID}."
+  confirm_discovered_ctid
 }
 
 run_ct() {
@@ -150,6 +181,110 @@ run_ct_sh() {
   pct exec "${CTID}" -- sh -c "$1"
 }
 
+require_host_tool() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "ERROR: Required host tool is missing: $1" >&2
+    exit 1
+  fi
+}
+
+validate_source_path() {
+  if [[ -z "${SOURCE_PATH}" ]]; then
+    return
+  fi
+
+  if [[ -d "${SOURCE_PATH}" ]]; then
+    SOURCE_KIND="directory"
+    require_host_tool tar
+    return
+  fi
+
+  if [[ ! -f "${SOURCE_PATH}" ]]; then
+    echo "ERROR: --source path was not found: ${SOURCE_PATH}" >&2
+    exit 2
+  fi
+
+  case "${SOURCE_PATH,,}" in
+    *.zip)
+      SOURCE_KIND="zip"
+      ;;
+    *.tgz|*.tar.gz)
+      SOURCE_KIND="tgz"
+      ;;
+    *)
+      echo "ERROR: --source must be a directory, .zip, .tgz, or .tar.gz file." >&2
+      exit 2
+      ;;
+  esac
+}
+
+install_local_source() {
+  local host_archive=""
+  local remote_archive="/tmp/watchstate-source-${CTID}-$$"
+
+  echo "Installing WatchState source from local ${SOURCE_KIND}: ${SOURCE_PATH}"
+
+  if [[ "${SOURCE_KIND}" == "directory" ]]; then
+    host_archive="$(mktemp --suffix=.tgz)"
+    if ! tar -C "${SOURCE_PATH}" -czf "${host_archive}" .; then
+      rm -f "${host_archive}"
+      return 1
+    fi
+    remote_archive="${remote_archive}.tgz"
+    if ! pct push "${CTID}" "${host_archive}" "${remote_archive}"; then
+      rm -f "${host_archive}"
+      return 1
+    fi
+    rm -f "${host_archive}"
+  elif [[ "${SOURCE_KIND}" == "zip" ]]; then
+    remote_archive="${remote_archive}.zip"
+    pct push "${CTID}" "${SOURCE_PATH}" "${remote_archive}"
+  else
+    remote_archive="${remote_archive}.tgz"
+    pct push "${CTID}" "${SOURCE_PATH}" "${remote_archive}"
+  fi
+
+  run_ct_sh "
+set -e
+trap 'rm -rf /tmp/watchstate-source ${remote_archive}' EXIT
+rm -rf /tmp/watchstate-source
+mkdir -p /tmp/watchstate-source
+if [ '${SOURCE_KIND}' = 'zip' ]; then
+  unzip -q '${remote_archive}' -d /tmp/watchstate-source
+else
+  tar -xzf '${remote_archive}' -C /tmp/watchstate-source
+fi
+entry_count=\$(find /tmp/watchstate-source -mindepth 1 -maxdepth 1 | wc -l)
+source_root=/tmp/watchstate-source
+if [ \"\${entry_count}\" -eq 1 ]; then
+  first_entry=\$(find /tmp/watchstate-source -mindepth 1 -maxdepth 1 | head -n 1)
+  if [ -d \"\${first_entry}\" ]; then
+    source_root=\"\${first_entry}\"
+  fi
+fi
+if [ ! -f \"\${source_root}/composer.json\" ]; then
+  echo 'ERROR: Local source does not look like a WatchState source tree; composer.json was not found at the archive root.' >&2
+  exit 1
+fi
+rm -rf /opt/app
+install -d -o watchstate -g watchstate /opt/app
+rsync -a --delete \"\${source_root}/\" /opt/app/
+cat > /opt/app/.watchstate-source <<EOF
+mode=local
+source_kind=${SOURCE_KIND}
+installed_at_utc=\$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+chown -R watchstate:watchstate /opt/app
+rm -rf /tmp/watchstate-source '${remote_archive}'
+"
+}
+
+validate_source_path
+
+if ! command -v pct >/dev/null 2>&1; then
+  echo "ERROR: pct was not found. Run this script on the Proxmox host." >&2
+  exit 1
+fi
 find_service_template_dir() {
   local candidate
   for candidate in "${REPO_ROOT}/systemd" "${SCRIPT_DIR}/systemd" "$(pwd)/systemd"; do
@@ -356,14 +491,19 @@ fi
 
 run_ct /opt/bin/frankenphp --version
 
-echo "Cloning WatchState source."
-if run_ct test -d /opt/app/.git; then
-  echo "/opt/app already contains a Git work tree. Fetching requested branch."
-  run_ct runuser -u watchstate -- sh -c "cd /opt/app && git fetch origin && git checkout '${BRANCH}' && git pull --ff-only origin '${BRANCH}'"
+if [[ -n "${SOURCE_PATH}" ]]; then
+  install_local_source
 else
-  run_ct rm -rf /opt/app
-  run_ct install -d -o watchstate -g watchstate /opt/app
-  run_ct runuser -u watchstate -- git clone --branch "${BRANCH}" "${REPO_URL}" /opt/app
+  echo "Cloning WatchState source."
+  if run_ct test -d /opt/app/.git; then
+    echo "/opt/app already contains a Git work tree. Fetching requested branch."
+    run_ct runuser -u watchstate -- sh -c "cd /opt/app && git fetch origin && git checkout '${BRANCH}' && git pull --ff-only origin '${BRANCH}'"
+  else
+    run_ct rm -rf /opt/app
+    run_ct install -d -o watchstate -g watchstate /opt/app
+    run_ct runuser -u watchstate -- git clone --branch "${BRANCH}" "${REPO_URL}" /opt/app
+  fi
+  run_ct rm -f /opt/app/.watchstate-source >/dev/null 2>&1 || true
 fi
 
 run_ct chown -R watchstate:watchstate /opt/app /config

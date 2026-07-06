@@ -10,7 +10,9 @@ Update the native WatchState LXC deployment from the Proxmox host.
 Options:
   --ctid <id>           Proxmox CT ID. Overrides name discovery.
   --name <name>         Proxmox CT name to discover. Default: watchstate
+  -y, --yes            Confirm auto-discovered CT without prompting
   --branch <branch>     Git branch to fast-forward. Default: master
+  --source <path>       Host path to a WatchState source directory, .zip, .tgz, or .tar.gz. Overrides Git update.
   --backup-root <path>  Host-side backup root passed to backup script. Default: /root/watchstate-backups
   --skip-backup         Do not run backup-watchstate.sh before updating
   --skip-snapshot       Do not create a Proxmox snapshot before updating
@@ -20,15 +22,19 @@ Options:
 Examples:
   ./scripts/update-watchstate.sh
   ./scripts/update-watchstate.sh --name watchstate
-  ./scripts/update-watchstate.sh --ctid 103
+  ./scripts/update-watchstate.sh --ctid <ctid>
+  ./scripts/update-watchstate.sh --ctid <ctid> --source /root/watchstate-source.zip
   ./scripts/update-watchstate.sh --skip-snapshot
 USAGE
 }
 
 CTID=""
 CT_NAME="watchstate"
+ASSUME_YES="0"
 BRANCH="master"
 BACKUP_ROOT="/root/watchstate-backups"
+SOURCE_PATH=""
+SOURCE_KIND=""
 SKIP_BACKUP="0"
 SKIP_SNAPSHOT="0"
 SKIP_VERIFY="0"
@@ -44,8 +50,16 @@ while [[ $# -gt 0 ]]; do
       CT_NAME="${2:-}"
       shift 2
       ;;
+    -y|--yes)
+      ASSUME_YES="1"
+      shift
+      ;;
     --branch)
       BRANCH="${2:-}"
+      shift 2
+      ;;
+    --source)
+      SOURCE_PATH="${2:-}"
       shift 2
       ;;
     --backup-root)
@@ -76,8 +90,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${BRANCH}" ]]; then
-  echo "ERROR: --branch cannot be empty." >&2
+if [[ -z "${SOURCE_PATH}" && -z "${BRANCH}" ]]; then
+  echo "ERROR: --branch cannot be empty when --source is not supplied." >&2
   exit 2
 fi
 
@@ -91,11 +105,131 @@ if [[ -z "${CT_NAME}" && -z "${CTID}" ]]; then
   exit 2
 fi
 
+
+require_host_tool() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "ERROR: Required host tool is missing: $1" >&2
+    exit 1
+  fi
+}
+
+validate_source_path() {
+  if [[ -z "${SOURCE_PATH}" ]]; then
+    return
+  fi
+
+  if [[ -d "${SOURCE_PATH}" ]]; then
+    SOURCE_KIND="directory"
+    require_host_tool tar
+    return
+  fi
+
+  if [[ ! -f "${SOURCE_PATH}" ]]; then
+    echo "ERROR: --source path was not found: ${SOURCE_PATH}" >&2
+    exit 2
+  fi
+
+  case "${SOURCE_PATH,,}" in
+    *.zip)
+      SOURCE_KIND="zip"
+      ;;
+    *.tgz|*.tar.gz)
+      SOURCE_KIND="tgz"
+      ;;
+    *)
+      echo "ERROR: --source must be a directory, .zip, .tgz, or .tar.gz file." >&2
+      exit 2
+      ;;
+  esac
+}
+
+install_local_source() {
+  local host_archive=""
+  local remote_archive="/tmp/watchstate-source-${CTID}-$$"
+
+  echo "Installing WatchState source from local ${SOURCE_KIND}: ${SOURCE_PATH}"
+
+  if [[ "${SOURCE_KIND}" == "directory" ]]; then
+    host_archive="$(mktemp --suffix=.tgz)"
+    if ! tar -C "${SOURCE_PATH}" -czf "${host_archive}" .; then
+      rm -f "${host_archive}"
+      return 1
+    fi
+    remote_archive="${remote_archive}.tgz"
+    if ! pct push "${CTID}" "${host_archive}" "${remote_archive}"; then
+      rm -f "${host_archive}"
+      return 1
+    fi
+    rm -f "${host_archive}"
+  elif [[ "${SOURCE_KIND}" == "zip" ]]; then
+    remote_archive="${remote_archive}.zip"
+    pct push "${CTID}" "${SOURCE_PATH}" "${remote_archive}"
+  else
+    remote_archive="${remote_archive}.tgz"
+    pct push "${CTID}" "${SOURCE_PATH}" "${remote_archive}"
+  fi
+
+  run_ct_sh "
+set -e
+trap 'rm -rf /tmp/watchstate-source ${remote_archive}' EXIT
+rm -rf /tmp/watchstate-source
+mkdir -p /tmp/watchstate-source
+if [ '${SOURCE_KIND}' = 'zip' ]; then
+  unzip -q '${remote_archive}' -d /tmp/watchstate-source
+else
+  tar -xzf '${remote_archive}' -C /tmp/watchstate-source
+fi
+entry_count=\$(find /tmp/watchstate-source -mindepth 1 -maxdepth 1 | wc -l)
+source_root=/tmp/watchstate-source
+if [ \"\${entry_count}\" -eq 1 ]; then
+  first_entry=\$(find /tmp/watchstate-source -mindepth 1 -maxdepth 1 | head -n 1)
+  if [ -d \"\${first_entry}\" ]; then
+    source_root=\"\${first_entry}\"
+  fi
+fi
+if [ ! -f \"\${source_root}/composer.json\" ]; then
+  echo 'ERROR: Local source does not look like a WatchState source tree; composer.json was not found at the archive root.' >&2
+  exit 1
+fi
+rm -rf /opt/app
+install -d -o watchstate -g watchstate /opt/app
+rsync -a --delete \"\${source_root}/\" /opt/app/
+cat > /opt/app/.watchstate-source <<EOF
+mode=local
+source_kind=${SOURCE_KIND}
+installed_at_utc=\$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+chown -R watchstate:watchstate /opt/app
+rm -rf /tmp/watchstate-source '${remote_archive}'
+"
+}
+
+validate_source_path
+
 if ! command -v pct >/dev/null 2>&1; then
   echo "ERROR: pct was not found. Run this script on the Proxmox host." >&2
   exit 1
 fi
+confirm_discovered_ctid() {
+  if [[ "${ASSUME_YES}" == "1" ]]; then
+    echo "Auto-confirmed discovered CT '${CT_NAME}' as CTID ${CTID}."
+    return
+  fi
 
+  if [[ ! -t 0 ]]; then
+    echo "ERROR: CT '${CT_NAME}' was discovered as CTID ${CTID}, but confirmation requires an interactive terminal." >&2
+    echo "Pass --ctid ${CTID} to target it explicitly, or pass --yes to confirm name discovery for automation." >&2
+    exit 1
+  fi
+
+  local answer
+  printf "Discovered CT '%s' as CTID %s. Type 'yes' to continue: " "${CT_NAME}" "${CTID}" >&2
+  read -r answer
+  if [[ "${answer}" != "yes" ]]; then
+    echo "Aborted. Pass --ctid ${CTID} to target this container explicitly." >&2
+    exit 1
+  fi
+}
 resolve_ctid() {
   if [[ -n "${CTID}" ]]; then
     return
@@ -117,7 +251,7 @@ resolve_ctid() {
   fi
 
   CTID="${matches}"
-  echo "Discovered CT '${CT_NAME}' as CTID ${CTID}."
+  confirm_discovered_ctid
 }
 
 run_ct() {
@@ -155,6 +289,11 @@ for tool in git composer rsync curl redis-cli; do
     exit 1
   fi
 done
+
+if [[ "${SOURCE_KIND}" == "zip" ]] && ! run_ct_sh "command -v unzip >/dev/null 2>&1"; then
+  echo "ERROR: Required container tool is missing for --source zip archive: unzip" >&2
+  exit 1
+fi
 
 if ! run_ct test -x /usr/local/bin/bun; then
   echo "ERROR: Required container tool is missing: /usr/local/bin/bun" >&2
@@ -200,14 +339,17 @@ run_ct systemctl stop watchstate-scheduler.service
 run_ct systemctl stop watchstate-web.service
 
 echo "Updating WatchState source, dependencies, frontend output, and database state."
+if [[ -n "${SOURCE_PATH}" ]]; then
+  install_local_source
+else
+  run_ct runuser -u watchstate -- sh -c "cd /opt/app && git fetch origin && git status --short && git pull --ff-only origin '${BRANCH}'"
+  run_ct rm -f /opt/app/.watchstate-source >/dev/null 2>&1 || true
+fi
+
 run_ct runuser -u watchstate -- sh -c "
 set -e
 export PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 cd /opt/app
-
-git fetch origin
-git status --short
-git pull --ff-only origin '${BRANCH}'
 
 composer install --no-dev --prefer-dist --optimize-autoloader
 
