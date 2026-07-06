@@ -40,53 +40,28 @@ SKIP_SNAPSHOT="0"
 SKIP_VERIFY="0"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
+require_arg() {
+  local opt="$1"
+  local value="${2:-}"
+  if [[ -z "${value}" || "${value}" == --* ]]; then
+    echo "ERROR: ${opt} requires a value." >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --ctid)
-      CTID="${2:-}"
-      shift 2
-      ;;
-    --name)
-      CT_NAME="${2:-}"
-      shift 2
-      ;;
-    -y|--yes)
-      ASSUME_YES="1"
-      shift
-      ;;
-    --branch)
-      BRANCH="${2:-}"
-      shift 2
-      ;;
-    --source)
-      SOURCE_PATH="${2:-}"
-      shift 2
-      ;;
-    --backup-root)
-      BACKUP_ROOT="${2:-}"
-      shift 2
-      ;;
-    --skip-backup)
-      SKIP_BACKUP="1"
-      shift
-      ;;
-    --skip-snapshot)
-      SKIP_SNAPSHOT="1"
-      shift
-      ;;
-    --skip-verify)
-      SKIP_VERIFY="1"
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "ERROR: Unknown argument: $1" >&2
-      usage >&2
-      exit 2
-      ;;
+    --ctid) require_arg "$1" "${2:-}"; CTID="$2"; shift 2 ;;
+    --name) require_arg "$1" "${2:-}"; CT_NAME="$2"; shift 2 ;;
+    -y|--yes) ASSUME_YES="1"; shift ;;
+    --branch) require_arg "$1" "${2:-}"; BRANCH="$2"; shift 2 ;;
+    --source) require_arg "$1" "${2:-}"; SOURCE_PATH="$2"; shift 2 ;;
+    --backup-root) require_arg "$1" "${2:-}"; BACKUP_ROOT="$2"; shift 2 ;;
+    --skip-backup) SKIP_BACKUP="1"; shift ;;
+    --skip-snapshot) SKIP_SNAPSHOT="1"; shift ;;
+    --skip-verify) SKIP_VERIFY="1"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "ERROR: Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
@@ -105,6 +80,10 @@ if [[ -z "${CT_NAME}" && -z "${CTID}" ]]; then
   exit 2
 fi
 
+if [[ -n "${CTID}" && ! "${CTID}" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: CTID must be a numeric ID." >&2
+  exit 2
+fi
 
 require_host_tool() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -130,17 +109,79 @@ validate_source_path() {
   fi
 
   case "${SOURCE_PATH,,}" in
-    *.zip)
-      SOURCE_KIND="zip"
-      ;;
-    *.tgz|*.tar.gz)
-      SOURCE_KIND="tgz"
-      ;;
+    *.zip) SOURCE_KIND="zip" ;;
+    *.tgz|*.tar.gz) SOURCE_KIND="tgz" ;;
     *)
       echo "ERROR: --source must be a directory, .zip, .tgz, or .tar.gz file." >&2
       exit 2
       ;;
   esac
+}
+
+confirm_discovered_ctid() {
+  if [[ "${ASSUME_YES}" == "1" ]]; then
+    echo "Auto-confirmed discovered CT '${CT_NAME}' as CTID ${CTID}."
+    return
+  fi
+
+  if [[ ! -t 0 ]]; then
+    echo "ERROR: CT '${CT_NAME}' was discovered as CTID ${CTID}, but confirmation requires an interactive terminal." >&2
+    echo "Pass --ctid ${CTID} to target it explicitly, or pass --yes to confirm name discovery for automation." >&2
+    exit 1
+  fi
+
+  local answer
+  printf "Discovered CT '%s' as CTID %s. Type 'yes' to continue: " "${CT_NAME}" "${CTID}" >&2
+  read -r answer
+  if [[ "${answer}" != "yes" ]]; then
+    echo "Aborted. Pass --ctid ${CTID} to target this container explicitly." >&2
+    exit 1
+  fi
+}
+
+resolve_ctid() {
+  if [[ -n "${CTID}" ]]; then
+    return
+  fi
+
+  local matches match_count
+  matches="$(pct list | awk -v name="${CT_NAME}" 'NR > 1 && $NF == name {print $1}')"
+  match_count="$(printf '%s\n' "${matches}" | sed '/^$/d' | wc -l | awk '{print $1}')"
+
+  if [[ "${match_count}" == "0" ]]; then
+    echo "ERROR: No CT named '${CT_NAME}' was found. Pass --ctid <id> or --name <name>." >&2
+    exit 1
+  fi
+
+  if [[ "${match_count}" != "1" ]]; then
+    echo "ERROR: Multiple CTs named '${CT_NAME}' were found. Pass --ctid <id>." >&2
+    printf '%s\n' "${matches}" >&2
+    exit 1
+  fi
+
+  CTID="${matches}"
+  confirm_discovered_ctid
+}
+
+run_ct() {
+  pct exec "${CTID}" -- "$@"
+}
+
+run_ct_sh() {
+  pct exec "${CTID}" -- sh -c "$1"
+}
+
+normalize_app_source() {
+  run_ct_sh '
+set -e
+if [ -d /opt/app ]; then
+  find /opt/app -type f \( -name "*.php" -o -name "*.sh" -o -name "console" \) -exec sed -i "s/\r$//" {} +
+  if [ -f /opt/app/bin/console ]; then
+    chmod 0755 /opt/app/bin/console
+  fi
+  chown -R watchstate:watchstate /opt/app
+fi
+'
 }
 
 install_local_source() {
@@ -151,7 +192,11 @@ install_local_source() {
 
   if [[ "${SOURCE_KIND}" == "directory" ]]; then
     host_archive="$(mktemp --suffix=.tgz)"
-    if ! tar -C "${SOURCE_PATH}" -czf "${host_archive}" .; then
+    if ! tar -C "${SOURCE_PATH}" \
+      --exclude='./.git' \
+      --exclude='./vendor' \
+      --exclude='./node_modules' \
+      -czf "${host_archive}" .; then
       rm -f "${host_archive}"
       return 1
     fi
@@ -202,6 +247,13 @@ EOF
 chown -R watchstate:watchstate /opt/app
 rm -rf /tmp/watchstate-source '${remote_archive}'
 "
+
+  normalize_app_source
+}
+
+restart_services() {
+  run_ct systemctl start watchstate-web.service >/dev/null 2>&1 || true
+  run_ct systemctl start watchstate-scheduler.service >/dev/null 2>&1 || true
 }
 
 validate_source_path
@@ -210,62 +262,6 @@ if ! command -v pct >/dev/null 2>&1; then
   echo "ERROR: pct was not found. Run this script on the Proxmox host." >&2
   exit 1
 fi
-confirm_discovered_ctid() {
-  if [[ "${ASSUME_YES}" == "1" ]]; then
-    echo "Auto-confirmed discovered CT '${CT_NAME}' as CTID ${CTID}."
-    return
-  fi
-
-  if [[ ! -t 0 ]]; then
-    echo "ERROR: CT '${CT_NAME}' was discovered as CTID ${CTID}, but confirmation requires an interactive terminal." >&2
-    echo "Pass --ctid ${CTID} to target it explicitly, or pass --yes to confirm name discovery for automation." >&2
-    exit 1
-  fi
-
-  local answer
-  printf "Discovered CT '%s' as CTID %s. Type 'yes' to continue: " "${CT_NAME}" "${CTID}" >&2
-  read -r answer
-  if [[ "${answer}" != "yes" ]]; then
-    echo "Aborted. Pass --ctid ${CTID} to target this container explicitly." >&2
-    exit 1
-  fi
-}
-resolve_ctid() {
-  if [[ -n "${CTID}" ]]; then
-    return
-  fi
-
-  local matches match_count
-  matches="$(pct list | awk -v name="${CT_NAME}" 'NR > 1 && $NF == name {print $1}')"
-  match_count="$(printf '%s\n' "${matches}" | sed '/^$/d' | wc -l | awk '{print $1}')"
-
-  if [[ "${match_count}" == "0" ]]; then
-    echo "ERROR: No CT named '${CT_NAME}' was found. Pass --ctid <id> or --name <name>." >&2
-    exit 1
-  fi
-
-  if [[ "${match_count}" != "1" ]]; then
-    echo "ERROR: Multiple CTs named '${CT_NAME}' were found. Pass --ctid <id>." >&2
-    printf '%s\n' "${matches}" >&2
-    exit 1
-  fi
-
-  CTID="${matches}"
-  confirm_discovered_ctid
-}
-
-run_ct() {
-  pct exec "${CTID}" -- "$@"
-}
-
-run_ct_sh() {
-  pct exec "${CTID}" -- sh -c "$1"
-}
-
-restart_services() {
-  run_ct systemctl start watchstate-web.service >/dev/null 2>&1 || true
-  run_ct systemctl start watchstate-scheduler.service >/dev/null 2>&1 || true
-}
 
 resolve_ctid
 
@@ -317,7 +313,6 @@ if [[ "${SKIP_BACKUP}" == "0" ]]; then
     echo "Run chmod +x scripts/backup-watchstate.sh or use --skip-backup." >&2
     exit 1
   fi
-
   echo "Running pre-update backup."
   "${SCRIPT_DIR}/backup-watchstate.sh" --ctid "${CTID}" --backup-root "${BACKUP_ROOT}"
 else
@@ -344,22 +339,19 @@ if [[ -n "${SOURCE_PATH}" ]]; then
 else
   run_ct runuser -u watchstate -- sh -c "cd /opt/app && git fetch origin && git status --short && git pull --ff-only origin '${BRANCH}'"
   run_ct rm -f /opt/app/.watchstate-source >/dev/null 2>&1 || true
+  normalize_app_source
 fi
 
 run_ct runuser -u watchstate -- sh -c "
 set -e
 export PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 cd /opt/app
-
 composer install --no-dev --prefer-dist --optimize-autoloader
-
 /usr/local/bin/bun --cwd=./frontend install --frozen-lockfile
 composer frontend:gen
-
 rm -rf public/exported
 mkdir -p public/exported
 rsync -a --delete frontend/exported/ public/exported/
-
 /opt/bin/frankenphp php-cli bin/console db:migrate --execute --no-interaction
 /opt/bin/frankenphp php-cli bin/console db:index
 /opt/bin/frankenphp php-cli bin/console events:cache
