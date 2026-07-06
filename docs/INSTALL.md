@@ -109,7 +109,8 @@ The installer performs these actions inside the CT:
 - creates `/opt/app`, `/config`, and `/opt/bin`;
 - installs Bun to `/usr/local/bin/bun`;
 - downloads the latest FrankenPHP static binary for the CT architecture;
-- clones WatchState to `/opt/app`;
+- clones or copies WatchState source to `/opt/app`;
+- normalizes copied source line endings and restores `/opt/app/bin/console` execute permissions;
 - installs Composer dependencies;
 - installs frontend dependencies and generates frontend output;
 - initializes WatchState runtime/database state;
@@ -118,6 +119,17 @@ The installer performs these actions inside the CT:
 - runs post-install verification when `verify-watchstate.sh` is available.
 
 The script can run without the full repository layout. If `systemd/` templates are not available next to the script, it writes embedded service units into the CT.
+
+### Local or beta source testing
+
+To test a non-production WatchState source tree or archive, pass `--source`:
+
+```bash
+./install-watchstate.sh --ctid 104 --source /root/watchstate-source.zip
+./update-watchstate.sh --ctid 104 --source /root/watchstate-source
+```
+
+Supported source formats are directories, `.zip`, `.tgz`, and `.tar.gz` archives. Local directory archives exclude `.git`, `vendor`, and `node_modules`; dependencies are rebuilt inside the target CT. After source extraction, the scripts normalize CRLF line endings in PHP, shell, and console entrypoint files and make `/opt/app/bin/console` executable. This prevents Windows-created ZIP files from producing `env: 'php\r': No such file or directory` or permission-denied errors when WatchState runs console commands.
 
 ## Verify
 
@@ -135,7 +147,7 @@ The verifier checks:
 - expected paths and ownership;
 - Redis, web, and scheduler service state;
 - FrankenPHP, Redis, and healthcheck runtime state;
-- Git branch/origin/status;
+- Git or local-source state;
 - frontend output;
 - required tools;
 - database presence;
@@ -157,7 +169,8 @@ By default, the update script:
 - runs a pre-update backup;
 - creates a Proxmox snapshot;
 - stops WatchState services;
-- fast-forwards the WatchState source tree;
+- fast-forwards or replaces the WatchState source tree;
+- normalizes copied source line endings and restores `/opt/app/bin/console` execute permissions;
 - updates Composer dependencies;
 - updates frontend dependencies and regenerates frontend output;
 - runs database migration/index/cache tasks;
