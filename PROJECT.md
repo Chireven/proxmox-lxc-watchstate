@@ -79,7 +79,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Validate Plex/Jellyfin backend connectivity.
 - [x] Add sanitized verifier support-bundle mode for backend topology diagnostics.
 - [x] Add inferred identity sync relationship diagnostics to support-bundle mode.
-- [x] Validate sanitized support-bundle output on rebuilt CT 103.
+- [x] Validate sanitized support-bundle output on a rebuilt production container.
 - [ ] Validate watched-state import from Plex server A.
 - [ ] Validate watched-state export/sync to Plex server B.
 - [ ] Validate reverse direction if bidirectional sync is intended.
@@ -92,7 +92,7 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Produce backup script.
 - [x] Validate backup script.
 - [x] Add backup listing and retention.
-- [x] Validate restore into a clean scratch CT.
+- [x] Validate restore into a clean scratch container.
 - [x] Write update procedure.
 - [x] Validate update procedure.
 - [x] Produce verification script.
@@ -103,33 +103,33 @@ This repository is public. Keep deployment-specific runtime data out of version 
 - [x] Write troubleshooting guide.
 - [x] Produce install script.
 - [x] Validate install script.
-- [x] Rebuild production CT 103 using only standalone helper scripts from the repository.
+- [x] Rebuild production using only standalone helper scripts from the repository.
 
 ## Current State
 
-WatchState is installed natively in Debian LXC CT 103. CT 103 was torn down and rebuilt successfully using only the standalone helper scripts downloaded from this repository into `/scripts/watchstate`; the full repository was not required on the Proxmox host.
+WatchState has been validated as a native Debian LXC deployment. The production container was torn down and rebuilt successfully using only the standalone helper scripts downloaded from this repository into `/scripts/watchstate`; the full repository was not required on the Proxmox host.
 
-The rebuilt CT is reported healthy and running normally. Composer dependencies are installed, frontend assets are built, the application has been initialized, Redis is running, FrankenPHP is installed, and both native WatchState services are expected to be enabled and running.
+The rebuilt production container is reported healthy and running normally. Composer dependencies are installed, frontend assets are built, the application has been initialized, Redis is running, FrankenPHP is installed, and both native WatchState services are expected to be enabled and running.
 
 Two Plex backends have been configured from the WatchState UI. The sanitized support bundle confirms both backends are reachable, both have import enabled, both currently have export disabled, and both share the same sanitized identity mapping. Aggregate database statistics confirm imported WatchState state exists for one backend without exposing media titles, paths, users, backend names, or tokens.
 
 Cron validation found no crontab for the WatchState service user and no WatchState-specific cron entries in the standard cron directories. The scheduler is handled by the enabled and running `watchstate-scheduler.service` unit.
 
-Backup and restore operations are validated. The host-side backup script creates archives for `/config`, native service units, FrankenPHP, and the app tree. A clean scratch CT restore was validated successfully and then removed. The backup script now supports CT name discovery, backup listing, prune-only mode, dry-run pruning, and count-based retention with a default of 14 timestamp-style backup directories.
+Backup and restore operations are validated. The host-side backup script creates archives for `/config`, native service units, FrankenPHP, and the app tree. A clean scratch container restore was validated successfully and then removed. The backup script supports CT name discovery, backup listing, prune-only mode, dry-run pruning, and count-based retention with a default of 14 timestamp-style backup directories.
 
 The native update procedure is validated. Required corrections discovered during testing are documented: `rsync` must be installed, frontend output must be synced from `/opt/app/frontend/exported` to `/opt/app/public/exported`, database migrations must use `db:migrate --execute --no-interaction`, and update-time frontend generation must use `/usr/local/bin/bun` or export a PATH that includes `/usr/local/bin`.
 
-The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, Git state, database presence, migration dry-run status, frontend output, and optional sanitized backend support-bundle output. Support-bundle mode now reports sanitized backend topology, aggregate state statistics, and inferred same-identity sync relationships. Verification output is color-coded for easier review and includes a compact final pass/warning/failure summary.
+The verification script is produced and validated. It supports CT name discovery and checks host/container state, service health, runtime dependencies, source state, database presence, migration dry-run status, frontend output, and optional sanitized backend support-bundle output. Support-bundle mode reports sanitized backend topology, aggregate state statistics, and inferred same-identity sync relationships. Verification output is color-coded for easier review and includes a compact final pass/warning/failure summary.
 
-The update script is produced and validated. It successfully performed CT name discovery, pre-update backup, retention check, Proxmox snapshot creation, source/dependency/frontend update steps, migration check, service restart, healthcheck validation, and post-update verification. The script now handles Bun installed at `/usr/local/bin/bun`.
+The update script is produced and validated. It successfully performed CT name discovery, pre-update backup, retention check, Proxmox snapshot creation, source/dependency/frontend update steps, migration check, service restart, healthcheck validation, and post-update verification. The script handles Bun installed at `/usr/local/bin/bun`.
 
-The install script is produced and validated against clean scratch CT 104 and rebuilt production CT 103. Validation confirmed that the script works as a standalone Proxmox-host helper from `/scripts/watchstate` without requiring the full repository layout on the host. Important validation fixes included embedded systemd service units, direct FrankenPHP static binary installation from GitHub releases, explicit Bun path handling, PATH export for Composer frontend generation, and pre-created `/opt/app` ownership for the `watchstate` service user.
+The install script is produced and validated against clean scratch and production containers. Validation confirmed that the script works as a standalone Proxmox-host helper from `/scripts/watchstate` without requiring the full repository layout on the host. Important validation fixes included embedded systemd service units, direct FrankenPHP static binary installation from GitHub releases, explicit Bun path handling, PATH export for Composer frontend generation, and pre-created `/opt/app` ownership for the `watchstate` service user.
 
 Rollback and uninstall notes are documented. The preferred rollback path is Proxmox snapshot rollback for full CT recovery, followed by application-level restore from backup archives when only WatchState state needs recovery. Full CT removal is the preferred uninstall path for this dedicated deployment.
 
 The troubleshooting guide is documented. It covers service health, web/scheduler issues, Redis, permissions, Git ownership, update failures, frontend output, backup/restore issues, snapshot handling, locale warnings, and final verification.
 
-Phase 7 media-backend integration documentation has been corrected. The media guide now treats WatchState as an API-based watched-state sync application. Media bind mounts are documented as optional troubleshooting-only mounts, not as a required part of normal WatchState operation. Live validation now focuses on watched-state import/export behavior between Plex backends. The verifier support-bundle mode is validated and now provides sanitized backend topology plus aggregate state statistics.
+Phase 7 media-backend integration documentation has been corrected. The media guide treats WatchState as an API-based watched-state sync application. Media bind mounts are documented as optional troubleshooting-only mounts, not as a required part of normal WatchState operation. Live validation focuses on watched-state import/export behavior between Plex backends. The verifier support-bundle mode provides sanitized backend topology plus aggregate state statistics.
 
 Current validated services:
 
